@@ -1,0 +1,26 @@
+name: CI - Analysis
+on:
+  # Se déclenche sur n'importe quel push sur n'importe quelle branche
+  push:
+    branches:
+      - '**'
+  # Se déclenche sur toute Pull Request ciblant n'importe quelle branche
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - '**'
+
+jobs:
+  sonarcloud:
+    name: SonarCloud Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Important pour que Sonar puisse lire l'historique Git
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Généré automatiquement par GitHub
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}    # Le secret de sornarcloud
