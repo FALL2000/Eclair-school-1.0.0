@@ -1,0 +1,22 @@
+# On ignore les environnements virtuels
+venv/
+.venv/
+env/
+
+# On ignore les fichiers de config sensibles
+.env
+*.pyc
+__pycache__/
+
+# On ignore les fichiers de logs et tests
+*.log
+tests/
+.pytest_cache/
+
+# On ignore les fichiers Docker et Sonar
+Dockerfile
+.dockerignore
+.scannerwork/
+
+# Git
+.gitignore

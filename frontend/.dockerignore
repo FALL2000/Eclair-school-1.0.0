@@ -1,0 +1,25 @@
+# Dépendances locales (À NE JAMAIS COPIER)
+node_modules/
+
+# Dossiers de build locaux
+dist/
+.angular/
+
+# Logs et fichiers temporaires
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.editorconfig
+
+# Git
+.git/
+.gitignore
+
+# Docker & CI
+Dockerfile
+.dockerignore
+.github/
+
+# Tests
+cypress/
+*.spec.ts
