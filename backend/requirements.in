@@ -1,7 +1,8 @@
 fastapi
 uvicorn[standard]
 pydantic-settings
-sqlalchemy
+sqlmodel
 pymysql
-# Pour la qualité et la gestion des dépendances
+cryptography
+alembic
 pip-tools
