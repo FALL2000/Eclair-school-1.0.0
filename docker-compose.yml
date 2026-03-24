@@ -3,8 +3,10 @@ services:
     image: mysql:8.0
     restart: always
     environment:
-      MYSQL_DATABASE: school_db
-      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: eclair_school
+      MYSQL_USER: school
+      MYSQL_PASSWORD: eclair
+      MYSQL_ROOT_PASSWORD: root
     ports:
       - "3306:3306"
     volumes:
@@ -26,6 +28,8 @@ services:
       - ./backend/.env
     depends_on:
       - db
+    environment:
+      - DB_HOST=db
 
 volumes:
   db_data:
