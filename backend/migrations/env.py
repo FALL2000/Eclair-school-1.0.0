@@ -2,10 +2,37 @@ from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
+from sqlmodel import SQLModel
 
 from alembic import context
 
-from backend.config.settings import get_settings
+from config.settings import get_settings
+from models.administration.annee import Annee
+from models.administration.appreciation import Appreciation
+from models.administration.classe import Classe
+from models.administration.cycle import Cycle
+from models.administration.matiere import Matiere
+from models.administration.matiere_evalue import MatiereEvalue
+from models.administration.niveau import Niveau
+from models.administration.permission import Permission
+from models.administration.role import Role
+from models.administration.section import Section
+from models.administration.serie import Serie
+from models.administration.trimestre import Trimestre
+from models.administration.user import User
+from models.eleve.eleve import Eleve
+from models.enseignants.enseignant import Enseignant
+from models.enseignants.type_salaire import TypeSalaire
+from models.enseignement.cours import Cours
+from models.enseignement.enseignement import Enseignement
+from models.enseignement.presence_eleve import PresenceEleve
+from models.enseignement.presence_enseignant import PresenceEnseignant
+from models.evaluations.discipline_eleve import DisciplineEleve
+from models.evaluations.evaluation import Evaluation
+from models.evaluations.notation import Notation
+from models.inscription.inscription import Inscription
+from models.scolarite.reglement import Reglement
+from models.scolarite.tranche_pension import TranchePension
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -17,21 +44,18 @@ if config.config_file_name is not None:
 
 # Load settings from .env and build the database URL dynamically
 settings = get_settings()
-if all([settings.db_user, settings.db_password, settings.db_host, settings.db_port, settings.db_name, settings.db_engine_string]):
-    database_url = (
-        f"{settings.db_engine_string}://{settings.db_user}:"
-        f"{settings.db_password}@{settings.db_host}:"
-        f"{settings.db_port}/{settings.db_name}"
-    )
-else:
-    print("Une variable de connexion à la BD manquantes dans le .env")
+database_url = (
+    f"{settings.db_engine_string}://{settings.db_user}:"
+    f"{settings.db_password}@{settings.db_host}:"
+    f"{settings.db_port}/{settings.db_name}"
+)
 config.set_main_option("sqlalchemy.url", database_url)
 
 # add your model's MetaData object here
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-target_metadata = None
+target_metadata = SQLModel.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

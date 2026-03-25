@@ -7,3 +7,7 @@ venv
 
 #Cache python
 __pycache__
+
+# Docker (Données persistantes)
+# On ignore les données de la DB, mais PAS le fichier docker-compose.yml
+db_data/
