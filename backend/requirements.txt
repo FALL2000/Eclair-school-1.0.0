@@ -104,6 +104,50 @@ websockets==16.0
 wheel==0.46.3
     # via pip-tools
 
+# fastapi[standard] (CLI `fastapi dev`) — ajoutées manuellement ; régénérer avec: pip-compile requirements.in
+certifi==2026.2.25
+    # via httpx, sentry-sdk
+dnspython==2.8.0
+    # via email-validator
+email-validator==2.3.0
+    # via fastapi
+fastapi-cli[standard]==0.0.24
+    # via fastapi
+fastapi-cloud-cli==0.15.1
+    # via fastapi-cli
+fastar==0.9.0
+    # via fastapi-cloud-cli
+httpcore==1.0.9
+    # via httpx
+httpx==0.28.1
+    # via fastapi
+jinja2==3.1.6
+    # via fastapi
+markdown-it-py==4.0.0
+    # via rich
+mdurl==0.1.2
+    # via markdown-it-py
+pydantic-extra-types==2.11.1
+    # via fastapi
+pygments==2.20.0
+    # via rich
+python-multipart==0.0.22
+    # via fastapi
+rich==14.3.3
+    # via rich-toolkit, typer
+rich-toolkit==0.19.7
+    # via fastapi-cli
+rignore==0.7.6
+    # via fastapi-cloud-cli
+sentry-sdk==2.57.0
+    # via fastapi-cloud-cli
+shellingham==1.5.4
+    # via typer
+typer==0.24.1
+    # via fastapi-cli
+urllib3==2.6.3
+    # via sentry-sdk
+
 # The following packages are considered to be unsafe in a requirements file:
 # pip
 # setuptools

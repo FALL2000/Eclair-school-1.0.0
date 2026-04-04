@@ -30,6 +30,7 @@ services:
       - db
     environment:
       - DB_HOST=db
+      - HOST_IP=0.0.0.0
 
 volumes:
   db_data:

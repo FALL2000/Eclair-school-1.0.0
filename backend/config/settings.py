@@ -1,5 +1,6 @@
 from functools import lru_cache
 import os
+from typing import List
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -14,6 +15,10 @@ class Settings(BaseSettings):
     db_port: int = 3306
     db_name: str
     db_engine_string: str = "mysql+pymysql"
+    type_school: str
+    api_prefix: str = "/api"
+    origins_cors: str = ""
+    host_ip: str = "127.0.0.1"
 
     secret_key: str
     debug: bool = False
@@ -24,6 +29,12 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore"
     )
+
+    @property
+    def origins(self) -> List[str]:
+        if not self.origins_cors:
+            return ["*"]
+        return [origin.strip() for origin in self.origins_cors.split(",")]
 
 
 @lru_cache

@@ -15,11 +15,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 3. Copie du code
 COPY . .
 
-# 4. GESTION DES PERMISSIONS (TOUJOURS EN ROOT)
-# On donne les droits d'exécution à start.sh AVANT de restreindre le reste
-RUN chmod +x start.sh && \
-    # Puis on passe tout en lecture seule (555 = Lecture + Exécution partout)
-    chmod -R 555 /app
+# 4. GESTION DES PERMISSIONS
+# On crée le dossier logs s'il n'existe pas
+RUN mkdir -p /app/logs && \
+    # On donne la propriété de tout le dossier à myuser
+    chown -R myuser:myuser /app && \
+    # On donne les droits d'exécution au script
+    chmod +x start.sh && \
+    # OPTIONNEL : On peut laisser le reste en 555, 
+    # Le dossier logs DOIT être en 755 (écriture autorisée pour le propriétaire)
+    chmod -R 555 /app && \
+    chmod -R 755 /app/logs
 
 # 5. Passage à l'utilisateur non-privilégié
 USER myuser
