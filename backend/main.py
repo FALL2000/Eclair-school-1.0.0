@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 import uvicorn
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from controllers.router import router as api_router
@@ -48,6 +50,18 @@ app = init_api()
 def ping_route():
     """Route pour vérifier que fast api fonctionne"""
     return {"status": "success", "message": "Le serveur FastAPI tourne !"}
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler_app(request: Request, exceptions: RequestValidationError):
+    """Gestion des erreurs retournes par les validateurs pydantic"""
+    error_messages = []
+    for error in exceptions.errors():
+        error_messages.append({
+            "location": error["loc"],
+            "message": error["msg"]
+        })
+    return JSONResponse(status_code=400, content={"detail": error_messages})
 
 
 if __name__ == "__main__":
