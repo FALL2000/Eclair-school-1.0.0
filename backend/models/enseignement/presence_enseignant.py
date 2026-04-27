@@ -22,6 +22,8 @@ class PresenceEnseignant(PresenceEnseignantBase, table=True):
         foreign_key="cours.id",
         description="Id du cours",
     )
+    id_enseignant: int = Field(
+        foreign_key="enseignant.id", description="Id de l'enseignant")
 
     cours: "Cours" = Relationship(back_populates="presences_enseignant")
     enseignant: "Enseignant" = Relationship(back_populates="presences")
