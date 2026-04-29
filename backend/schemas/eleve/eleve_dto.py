@@ -1,6 +1,7 @@
 from datetime import date
 from typing import Optional
 
+from pydantic import field_validator
 from sqlmodel import Field, SQLModel
 
 
@@ -24,7 +25,14 @@ class EleveBase(SQLModel):
     telephone_parent2: Optional[str] = Field(
         default=None, max_length=20, description="Telephone du parent de l'eleve 2", nullable=True)
     genre: str = Field(
-        max_length=1, description="Telephone du parent de l'eleve 2", nullable=False)
+        max_length=1, description="genre de l'eleve", nullable=False)
+
+    @field_validator("genre")
+    @classmethod
+    def genre_must_be_valid(cls, value):
+        if value is not None and value not in ['M', 'F']:
+            raise ValueError("le genre doit avoir la valeur 'M' ou 'F'")
+        return value
 
 
 class EleveCreateDTO(EleveBase):
@@ -42,6 +50,15 @@ class EleveUpdateDTO(SQLModel):
     telephone_parent1: Optional[str] = None
     telephone_parent2: Optional[str] = None
     genre: Optional[str] = None
+    is_active: Optional[bool] = Field(
+        default=None, description="Indique si l'eleve est actif dans l'etablissement")
+
+    @field_validator("genre")
+    @classmethod
+    def genre_must_be_valid(cls, value):
+        if value is not None and value not in ['M', 'F']:
+            raise ValueError("le genre doit avoir la valeur 'M' ou 'F'")
+        return value
 
 
 class EleveResponseDTO(EleveBase):

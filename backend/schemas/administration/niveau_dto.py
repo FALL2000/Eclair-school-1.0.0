@@ -1,6 +1,8 @@
-from typing import Optional
+from typing import List, Optional
 
 from sqlmodel import Field, SQLModel
+
+from schemas.administration.classe_dto import ClasseResponseDTO
 
 
 class NiveauBase(SQLModel):
@@ -19,7 +21,12 @@ class NiveauCreateDTO(NiveauBase):
 class NiveauUpdateDTO(SQLModel):
     code: Optional[str] = None
     libelle: Optional[str] = None
+    montant_inscription: Optional[float] = None
 
 
 class NiveauResponseDTO(NiveauBase):
     id: int
+
+
+class NiveauReadWithClasse(NiveauResponseDTO):
+    classes: List[ClasseResponseDTO]

@@ -1,7 +1,10 @@
 from datetime import date
 from typing import Optional
 
+from pydantic import ConfigDict
 from sqlmodel import Field, SQLModel
+
+from schemas.eleve.eleve_dto import EleveCreateDTO, EleveResponseDTO
 
 
 class InscriptionBase(SQLModel):
@@ -26,8 +29,26 @@ class InscriptionCreateDTO(InscriptionBase):
 class InscriptionUpdateDTO(SQLModel):
     is_redoublant: Optional[bool] = None
     is_nouveau: Optional[bool] = None
+    id_user: Optional[int] = None
 
 
 class InscriptionResponseDTO(InscriptionBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
-    date_inscris: date
+    date_inscris: Optional[date] = None
+    is_inscris: bool
+    eleve: EleveResponseDTO
+
+
+class InscriptionNouveauEleveRequestDTO(InscriptionBase):
+    eleve: EleveCreateDTO
+    id_classe: int = Field(description="Id de la classe d'affectation")
+
+
+class PaginatedInscription(SQLModel):
+    page: int
+    page_size: int
+    total_items: int
+    total_pages: int
+    inscriptions: list[InscriptionResponseDTO]
