@@ -19,6 +19,7 @@ class Cycle(CycleBase, table=True):
         description="Id de la section"
     )
 
-    section: "Section" = Relationship(back_populates="cycles")
+    section: "Section" = Relationship(
+        back_populates="cycles")
     niveaux: list["Niveau"] = Relationship(
-        back_populates="cycle", sa_relationship_kwargs={"cascade": "all, delete"})
+        back_populates="cycle", sa_relationship_kwargs={"cascade": "all, delete", "lazy": "selectin"})

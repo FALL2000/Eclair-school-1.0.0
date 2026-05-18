@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from models.administration.cycle import Cycle
     from models.administration.classe import Classe
     from models.administration.serie import Serie
-    from models.administration.matiere_evalue import MatiereEvalue
+    from models.administration.groupe_matiere_evalue import GroupeMatiereEvalue
     from models.scolarite.tranche_pension import TranchePension
 
 
@@ -21,7 +21,7 @@ class Niveau(NiveauBase, table=True):
         sa_column=Column(Integer, ForeignKey("cycle.id", ondelete="CASCADE")),
         description="Id du cycle"
     )
-    id_serie: int = Field(
+    id_serie: Optional[int] = Field(
         sa_column=Column(Integer, ForeignKey(
             "serie.id", ondelete="SET NULL"), nullable=True),
         description="Id de la serie"
@@ -30,8 +30,8 @@ class Niveau(NiveauBase, table=True):
     cycle: "Cycle" = Relationship(back_populates="niveaux")
     serie: "Serie" = Relationship(back_populates="niveaux")
     classes: list["Classe"] = Relationship(
-        back_populates="niveau", sa_relationship_kwargs={"cascade": "all, delete"})
+        back_populates="niveau", sa_relationship_kwargs={"cascade": "all, delete", "lazy": "selectin"})
     tranches_pension: list["TranchePension"] = Relationship(
         back_populates="niveau")
-    matieres_evaluees: list["MatiereEvalue"] = Relationship(
+    groupe_matiere_evaluees: list["GroupeMatiereEvalue"] = Relationship(
         back_populates="niveau", sa_relationship_kwargs={"cascade": "all, delete"})

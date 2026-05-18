@@ -1,6 +1,8 @@
-from typing import Optional
+from typing import List, Optional
 
 from sqlmodel import Field, SQLModel
+
+from schemas.administration.niveau_dto import NiveauReadWithClasse
 
 
 class CycleBase(SQLModel):
@@ -21,3 +23,7 @@ class CycleUpdateDTO(SQLModel):
 
 class CycleResponseDTO(CycleBase):
     id: int
+
+
+class CycleReadWithNiveauAndClasse(CycleResponseDTO):
+    niveaux: List[NiveauReadWithClasse]

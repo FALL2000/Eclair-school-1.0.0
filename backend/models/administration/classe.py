@@ -22,7 +22,8 @@ class Classe(ClasseBase, table=True):
     )
 
     niveau: "Niveau" = Relationship(back_populates="classes")
-    inscriptions: list["Inscription"] = Relationship(back_populates="classe")
+    inscriptions: list["Inscription"] = Relationship(
+        back_populates="classe", sa_relationship_kwargs={"lazy": "dynamic"})
     notations: list["Notation"] = Relationship(back_populates="classe")
     cours: list["Cours"] = Relationship(back_populates="classe")
     disciplines: list["DisciplineEleve"] = Relationship(
