@@ -20,7 +20,7 @@ class Enseignant(EnseignantBase, table=True):
 
     type_salaire: "TypeSalaire" = Relationship(back_populates="enseignants")
     enseignements: list["Enseignement"] = Relationship(
-        back_populates="enseignant", sa_relationship_kwargs={"cascade": "all, delete"})
+        back_populates="enseignant", sa_relationship_kwargs={"cascade": "all, delete", "lazy": "selectin"})
     cours: list["Cours"] = Relationship(back_populates="enseignant")
     presences: list["PresenceEnseignant"] = Relationship(
         back_populates="enseignant")

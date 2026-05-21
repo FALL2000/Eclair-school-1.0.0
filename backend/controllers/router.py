@@ -1,4 +1,8 @@
 from fastapi import APIRouter
+from controllers.enseignants.enseignant_controllers import router as enseignant_router
+from controllers.enseignement.enseignement_controllers import router as enseignement_router
+from controllers.scolarite.reglement_controllers import router as reglement_router
+from controllers.scolarite.tranche_pension_controllers import router as tranche_pension_router
 from controllers.eleve.eleve_controllers import router as eleve_router
 from controllers.inscription.inscription_controllers import router as inscription_router
 from controllers.administration.user_controllers import router as user_router
@@ -37,6 +41,10 @@ def include_api_routes() -> APIRouter:
     router.include_router(matiere_router, prefix="/matiere", tags=["matieres"])
     router.include_router(groupe_matiere_evalue_router, prefix="/groupe-matiere-evalue", tags=["groupe matieres evalues"])
     router.include_router(matiere_evalue_router, prefix="/matiere-evalue", tags=["matieres evaluees"])
+    router.include_router(tranche_pension_router, prefix="/tranche-pension", tags=["tranches pension"])
+    router.include_router(reglement_router, prefix="/reglement", tags=["reglements"])
+    router.include_router(enseignant_router, prefix="/enseignant", tags=["enseignants"])
+    router.include_router(enseignement_router, prefix="/enseignement", tags=["enseignements"])
 
     return router
 
