@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 
 from sqlmodel import Field, SQLModel
 
@@ -17,6 +17,10 @@ class TranchePensionCreateDTO(TranchePensionBase):
     pass
 
 
+class TranchePensionBulkCreateDTO(SQLModel):
+    tranches: List[TranchePensionCreateDTO]
+
+
 class TranchePensionUpdateDTO(SQLModel):
     code: Optional[str] = None
     libelle: Optional[str] = None
@@ -24,5 +28,18 @@ class TranchePensionUpdateDTO(SQLModel):
     montant: Optional[float] = None
 
 
+class TranchePensionBulkUpdateItemDTO(SQLModel):
+    id: int
+    code: Optional[str] = None
+    libelle: Optional[str] = None
+    numero_ordre: Optional[int] = None
+    montant: Optional[float] = None
+
+
+class TranchePensionBulkUpdateDTO(SQLModel):
+    tranches: List[TranchePensionBulkUpdateItemDTO]
+
+
 class TranchePensionResponseDTO(TranchePensionBase):
     id: int
+    id_niveau: int

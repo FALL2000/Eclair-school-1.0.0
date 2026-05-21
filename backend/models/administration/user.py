@@ -7,6 +7,7 @@ from schemas.administration.user_dto import UserBase
 if TYPE_CHECKING:
     from models.inscription.inscription import Inscription
     from models.administration.user_role import UserRole
+    from models.scolarite.reglement import Reglement
 
 
 class User(UserBase, table=True):
@@ -24,3 +25,4 @@ class User(UserBase, table=True):
     user_roles: list["UserRole"] = Relationship(
         back_populates="user", sa_relationship_kwargs={"cascade": "all, delete"})
     inscriptions: list["Inscription"] = Relationship(back_populates="user")
+    reglements: list["Reglement"] = Relationship(back_populates="user")
