@@ -48,7 +48,7 @@ class EnseignementService:
                 status_code=409,
                 detail={
                     "error_code": "DUPLICATION_ENSEIGNANT_MATIERE",
-                    "message": f"Un enseignement existe déjà pour cet enseignant et cette matière.",
+                    "message": "Un enseignement existe déjà pour cet enseignant et cette matière.",
                 },
             )
 
@@ -65,13 +65,15 @@ class EnseignementService:
             db_enseignant = Enseignant.model_validate(enseignant_dict)
             new_enseignant = self.enseignant_repository.save(db_enseignant)
 
-            self._check_duplicate_enseignant_matiere(new_enseignant.id, id_matiere)
+            self._check_duplicate_enseignant_matiere(
+                new_enseignant.id, id_matiere)
 
             enseignement_dict = data.enseignement.model_dump()
             enseignement_dict["id_enseignant"] = new_enseignant.id
             enseignement_dict["id_matiere"] = id_matiere
             db_enseignement = Enseignement.model_validate(enseignement_dict)
-            new_enseignement = self.enseignement_repository.save(db_enseignement)
+            new_enseignement = self.enseignement_repository.save(
+                db_enseignement)
 
             self._session().commit()
             return EnseignementAvecEnseignantResponseDTO(
@@ -110,11 +112,14 @@ class EnseignementService:
 
             new_enseignements = []
             for item in data.enseignements:
-                self._check_duplicate_enseignant_matiere(new_enseignant.id, item.id_matiere)
+                self._check_duplicate_enseignant_matiere(
+                    new_enseignant.id, item.id_matiere)
                 enseignement_dict = item.model_dump()
                 enseignement_dict["id_enseignant"] = new_enseignant.id
-                db_enseignement = Enseignement.model_validate(enseignement_dict)
-                new_enseignement = self.enseignement_repository.save(db_enseignement)
+                db_enseignement = Enseignement.model_validate(
+                    enseignement_dict)
+                new_enseignement = self.enseignement_repository.save(
+                    db_enseignement)
                 new_enseignements.append(new_enseignement)
 
             self._session().commit()
@@ -147,7 +152,8 @@ class EnseignementService:
                     },
                 )
             for item in data.items:
-                self._check_duplicate_enseignant_matiere(id_enseignant, item.id_matiere)
+                self._check_duplicate_enseignant_matiere(
+                    id_enseignant, item.id_matiere)
 
             data_list = [
                 {**item.model_dump(), "id_enseignant": id_enseignant}
@@ -169,7 +175,8 @@ class EnseignementService:
     ) -> EnseignementResponseDTO:
         """Modifie un enseignement en BD"""
         try:
-            db_enseignement = self.enseignement_repository.findOne(enseignement_id)
+            db_enseignement = self.enseignement_repository.findOne(
+                enseignement_id)
             self._check_enseignement_exists(db_enseignement)
             update_data = data.model_dump(exclude_unset=True)
             for key, value in update_data.items():
@@ -192,9 +199,11 @@ class EnseignementService:
             for item in data.enseignements:
                 db_enseignement = self.enseignement_repository.findOne(item.id)
                 self._check_enseignement_exists(db_enseignement)
-                update_data = item.model_dump(exclude_unset=True, exclude={"id"})
+                update_data = item.model_dump(
+                    exclude_unset=True, exclude={"id"})
                 if update_data:
-                    self.enseignement_repository.updateMany({"id": item.id}, update_data)
+                    self.enseignement_repository.updateMany(
+                        {"id": item.id}, update_data)
             self._session().commit()
             return [self.enseignement_repository.findOne(item.id) for item in data.enseignements]
         except HTTPException as http_exec:
@@ -208,7 +217,8 @@ class EnseignementService:
     def delete_enseignement(self, enseignement_id: int):
         """Supprime un enseignement en BD"""
         try:
-            db_enseignement = self.enseignement_repository.findOne(enseignement_id)
+            db_enseignement = self.enseignement_repository.findOne(
+                enseignement_id)
             self._check_enseignement_exists(db_enseignement)
             deleted = self.enseignement_repository.deleteOne(enseignement_id)
             if deleted:
