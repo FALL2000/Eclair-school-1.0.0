@@ -152,7 +152,7 @@ class ReglementService:
                     },
                 )
             inscriptions = classe.inscriptions.filter(
-                Inscription.id_annee == annee.id
+                Inscription.id_annee == annee.id, Inscription.is_inscris == True
             ).all()
 
             reglements = []

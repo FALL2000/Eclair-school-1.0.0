@@ -1,4 +1,6 @@
 from fastapi import APIRouter
+from controllers.enseignants.enseignant_controllers import router as enseignant_router
+from controllers.enseignement.enseignement_controllers import router as enseignement_router
 from controllers.scolarite.reglement_controllers import router as reglement_router
 from controllers.scolarite.tranche_pension_controllers import router as tranche_pension_router
 from controllers.eleve.eleve_controllers import router as eleve_router
@@ -24,23 +26,35 @@ router = APIRouter()
 def include_api_routes() -> APIRouter:
     """Enregistre tous les sous-routeurs sur le routeur principal."""
     router.include_router(eleve_router, prefix="/eleves", tags=["eleves"])
-    router.include_router(inscription_router, prefix="/inscription", tags=["inscriptions"])
+    router.include_router(inscription_router,
+                          prefix="/inscription", tags=["inscriptions"])
     router.include_router(user_router, prefix="/user", tags=["users"])
     router.include_router(auth_router, prefix="/auth", tags=["authentication"])
     router.include_router(annee_router, prefix="/annee", tags=["annees"])
-    router.include_router(appreciation_router, prefix="/appreciation", tags=["appreciations"])
+    router.include_router(appreciation_router,
+                          prefix="/appreciation", tags=["appreciations"])
     router.include_router(section_router, prefix="/section", tags=["sections"])
     router.include_router(serie_router, prefix="/serie", tags=["series"])
     router.include_router(cycle_router, prefix="/cycle", tags=["cycles"])
     router.include_router(niveau_router, prefix="/niveau", tags=["niveaux"])
     router.include_router(classe_router, prefix="/classe", tags=["classes"])
-    router.include_router(trimestre_router, prefix="/trimestre", tags=["trimestres"])
-    router.include_router(groupe_matiere_router, prefix="/groupe-matiere", tags=["groupe matieres"])
+    router.include_router(
+        trimestre_router, prefix="/trimestre", tags=["trimestres"])
+    router.include_router(groupe_matiere_router,
+                          prefix="/groupe-matiere", tags=["groupe matieres"])
     router.include_router(matiere_router, prefix="/matiere", tags=["matieres"])
-    router.include_router(groupe_matiere_evalue_router, prefix="/groupe-matiere-evalue", tags=["groupe matieres evalues"])
-    router.include_router(matiere_evalue_router, prefix="/matiere-evalue", tags=["matieres evaluees"])
-    router.include_router(tranche_pension_router, prefix="/tranche-pension", tags=["tranches pension"])
-    router.include_router(reglement_router, prefix="/reglement", tags=["reglements"])
+    router.include_router(groupe_matiere_evalue_router,
+                          prefix="/groupe-matiere-evalue", tags=["groupe matieres evalues"])
+    router.include_router(matiere_evalue_router,
+                          prefix="/matiere-evalue", tags=["matieres evaluees"])
+    router.include_router(tranche_pension_router,
+                          prefix="/tranche-pension", tags=["tranches pension"])
+    router.include_router(
+        reglement_router, prefix="/reglement", tags=["reglements"])
+    router.include_router(
+        enseignant_router, prefix="/enseignant", tags=["enseignants"])
+    router.include_router(enseignement_router,
+                          prefix="/enseignement", tags=["enseignements"])
 
     return router
 

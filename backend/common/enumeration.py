@@ -9,3 +9,8 @@ class TypeReglement(str, Enum):
 class StatutReglement(str, Enum):
     VALIDE = "valide"
     ANNULE = "annule"
+
+
+class TypeSalaire(str, Enum):
+    MENSUEL = "Mensuel"
+    HORAIRE = "Horaire"

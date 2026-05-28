@@ -1,5 +1,6 @@
 from fastapi import HTTPException
 
+from repositories.administration.annee_repository import AnneeRepository
 from models.scolarite.tranche_pension import TranchePension
 from repositories.scolarite.tranche_pension_repository import TranchePensionRepository
 from schemas.scolarite.tranche_pension_dto import (
@@ -11,8 +12,9 @@ from schemas.scolarite.tranche_pension_dto import (
 
 
 class TranchePensionService:
-    def __init__(self, tranche_repository: TranchePensionRepository):
+    def __init__(self, tranche_repository: TranchePensionRepository, annee_repository: AnneeRepository):
         self.tranche_repository = tranche_repository
+        self.annee_repository = annee_repository
 
     def _session(self):
         return self.tranche_repository.session
@@ -29,7 +31,8 @@ class TranchePensionService:
             )
 
     def _check_numero_ordre_exists(self, id_niveau: int, numero_ordre: int):
-        exist = self.tranche_repository.findBy(id_niveau=id_niveau, numero_ordre=numero_ordre)
+        exist = self.tranche_repository.findBy(
+            id_niveau=id_niveau, numero_ordre=numero_ordre)
         if len(exist) > 0:
             raise HTTPException(
                 status_code=409,
@@ -122,7 +125,8 @@ class TranchePensionService:
                 )
             for tranche in data.tranches:
                 self._check_code_exists(tranche.code)
-                self._check_numero_ordre_exists(id_niveau, tranche.numero_ordre)
+                self._check_numero_ordre_exists(
+                    id_niveau, tranche.numero_ordre)
 
             data_list = [
                 {**t.model_dump(), "id_niveau": id_niveau}
@@ -147,7 +151,8 @@ class TranchePensionService:
             if tranche_update.code is not None and tranche_update.code != db_tranche.code:
                 self._check_code_exists(tranche_update.code)
             if tranche_update.numero_ordre is not None and tranche_update.numero_ordre != db_tranche.numero_ordre:
-                self._check_numero_ordre_exists(db_tranche.id_niveau, tranche_update.numero_ordre)
+                self._check_numero_ordre_exists(
+                    db_tranche.id_niveau, tranche_update.numero_ordre)
             update_data = tranche_update.model_dump(exclude_unset=True)
             for key, value in update_data.items():
                 setattr(db_tranche, key, value)
@@ -170,10 +175,13 @@ class TranchePensionService:
                 if item.code is not None and item.code != db_tranche.code:
                     self._check_code_exists(item.code)
                 if item.numero_ordre is not None and item.numero_ordre != db_tranche.numero_ordre:
-                    self._check_numero_ordre_exists(db_tranche.id_niveau, item.numero_ordre)
-                update_data = item.model_dump(exclude_unset=True, exclude={"id"})
+                    self._check_numero_ordre_exists(
+                        db_tranche.id_niveau, item.numero_ordre)
+                update_data = item.model_dump(
+                    exclude_unset=True, exclude={"id"})
                 if update_data:
-                    self.tranche_repository.updateMany({"id": item.id}, update_data)
+                    self.tranche_repository.updateMany(
+                        {"id": item.id}, update_data)
             self._session().commit()
             ids = [item.id for item in data.tranches]
             return [self.tranche_repository.findOne(id) for id in ids]
@@ -188,6 +196,14 @@ class TranchePensionService:
     def delete_tranche(self, tranche_id: int):
         """Supprime une tranche pension en BD"""
         try:
+            if len(self.annee_repository.findByIs_cloture(False)) > 0:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "error_code": "CANNOT_DELETE",
+                        "message": "Impossible de supprimer une tranche durant une année scolaire en cours",
+                    },
+                )
             db_tranche = self.tranche_repository.findOne(tranche_id)
             self._check_tranche_exists(db_tranche)
             deleted = self.tranche_repository.deleteOne(tranche_id)
