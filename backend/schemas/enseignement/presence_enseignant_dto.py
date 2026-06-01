@@ -35,4 +35,3 @@ class PresenceEnseignantUpdateDTO(SQLModel):
 
 class PresenceEnseignantResponseDTO(PresenceEnseignantBase):
     id: int
-

@@ -1,4 +1,3 @@
-from datetime import time
 from typing import Optional, TYPE_CHECKING
 
 from sqlmodel import Field, Relationship
@@ -37,10 +36,22 @@ class Cours(CoursBase, table=True):
         description="Id de la matière",
     )
 
-    enseignant: "Enseignant" = Relationship(back_populates="cours")
-    classe: "Classe" = Relationship(back_populates="cours")
-    annee: "Annee" = Relationship(back_populates="cours")
-    matiere: "Matiere" = Relationship(back_populates="cours")
+    enseignant: "Enseignant" = Relationship(
+        back_populates="cours",
+        sa_relationship_kwargs={"lazy": "joined"},
+    )
+    classe: "Classe" = Relationship(
+        back_populates="cours",
+        sa_relationship_kwargs={"lazy": "joined"},
+    )
+    annee: "Annee" = Relationship(
+        back_populates="cours",
+        sa_relationship_kwargs={"lazy": "joined"},
+    )
+    matiere: "Matiere" = Relationship(
+        back_populates="cours",
+        sa_relationship_kwargs={"lazy": "joined"},
+    )
     presences_enseignant: list["PresenceEnseignant"] = Relationship(
         back_populates="cours"
     )

@@ -35,4 +35,3 @@ class PresenceEleveUpdateDTO(SQLModel):
 
 class PresenceEleveResponseDTO(PresenceEleveBase):
     id: int
-
