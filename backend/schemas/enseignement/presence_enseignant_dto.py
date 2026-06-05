@@ -35,3 +35,5 @@ class PresenceEnseignantUpdateDTO(SQLModel):
 
 class PresenceEnseignantResponseDTO(PresenceEnseignantBase):
     id: int
+    id_cours: int
+    id_enseignant: int

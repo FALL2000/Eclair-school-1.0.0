@@ -3,6 +3,8 @@ from controllers.administration.configuration_controllers import router as confi
 from controllers.enseignants.enseignant_controllers import router as enseignant_router
 from controllers.enseignement.enseignement_controllers import router as enseignement_router
 from controllers.enseignement.cours_controllers import router as cours_router
+from controllers.enseignement.presence_eleve_controllers import router as presence_eleve_router
+from controllers.enseignement.presence_enseignant_controllers import router as presence_enseignant_router
 from controllers.scolarite.reglement_controllers import router as reglement_router
 from controllers.scolarite.tranche_pension_controllers import router as tranche_pension_router
 from controllers.eleve.eleve_controllers import router as eleve_router
@@ -59,6 +61,8 @@ def include_api_routes() -> APIRouter:
     router.include_router(enseignement_router,
                           prefix="/enseignement", tags=["enseignements"])
     router.include_router(cours_router, prefix="/cours", tags=["cours"])
+    router.include_router(presence_eleve_router, prefix="/presence-eleve", tags=["presences eleves"])
+    router.include_router(presence_enseignant_router, prefix="/presence-enseignant", tags=["presences enseignants"])
 
     return router
 

@@ -1,4 +1,4 @@
-from typing import Annotated, Any
+from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
@@ -50,8 +50,9 @@ def get_cours_by_classe(
     cours_service: Annotated[CoursService, Depends(get_cours_service)],
     _: Annotated[dict[str, Any], Depends(check_permission_user)],
     id_classe: Annotated[int, Query(description="Id de la classe")] = ...,
+    jour: Annotated[Optional[str], Query(description="Jour du cours (Lundi, Mardi, ...)")] = None,
 ):
-    return cours_service.get_cours_by_classe(id_classe)
+    return cours_service.get_cours_by_classe(id_classe, jour)
 
 
 @router.post(

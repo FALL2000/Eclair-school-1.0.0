@@ -30,4 +30,7 @@ class PresenceEleve(PresenceEleveBase, table=True):
     )
 
     cours: "Cours" = Relationship(back_populates="presences_eleves")
-    eleve: "Eleve" = Relationship(back_populates="presences")
+    eleve: "Eleve" = Relationship(
+        back_populates="presences",
+        sa_relationship_kwargs={"lazy": "joined"},
+    )

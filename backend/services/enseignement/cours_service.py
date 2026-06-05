@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import HTTPException
 
 from models.enseignement.cours import Cours
@@ -168,11 +170,14 @@ class CoursService:
             raise HTTPException(
                 status_code=500, detail=f"Une erreur lors de la récupération des cours: {str(e)}")
 
-    def get_cours_by_classe(self, id_classe: int) -> list[CoursParClasseResponseDTO]:
+    def get_cours_by_classe(self, id_classe: int, jour: Optional[str] = None) -> list[CoursParClasseResponseDTO]:
         """Récupère les cours d'une classe pour l'année scolaire en cours"""
         try:
             annee = self._get_annee_service().get_annee_scolaire()[0]
-            return self.cours_repository.findBy(id_classe=id_classe, id_annee=annee.id)
+            filters = {"id_classe": id_classe, "id_annee": annee.id}
+            if jour is not None:
+                filters["jour"] = jour
+            return self.cours_repository.findBy(**filters)
         except HTTPException as http_exec:
             raise http_exec
         except Exception as e:
