@@ -119,7 +119,7 @@ class GroupeMatiereService:
 
     def get_all_groupe_matiere(self):
         try:
-            db_groupe_matieres = self.groupe_matiere_repository.findAll()
+            db_groupe_matieres = self.groupe_matiere_repository.findAll(load_relations=False)
             return db_groupe_matieres
         except HTTPException as http_exec:
             raise http_exec

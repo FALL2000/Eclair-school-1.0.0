@@ -120,7 +120,7 @@ class NiveauService:
     def get_all_niveau(self):
         """Recupere tous les niveaux en BD"""
         try:
-            db_niveaux = self.niveau_repository.findAll()
+            db_niveaux = self.niveau_repository.findAll(load_relations=False)
             return db_niveaux
         except HTTPException as http_exec:
             raise http_exec

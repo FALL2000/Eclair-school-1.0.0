@@ -44,6 +44,7 @@ class CoursService:
 
     def _check_periode_classe(self, jour: str, heure_deb, heure_fin, id_classe: int, id_annee: int):
         existing = self.cours_repository.findBy(
+            load_relations=False,
             jour=jour, heure_deb=heure_deb, heure_fin=heure_fin,
             id_classe=id_classe, id_annee=id_annee,
         )
@@ -58,6 +59,7 @@ class CoursService:
 
     def _check_enseignant_periode(self, jour: str, heure_deb, heure_fin, id_enseignant: int, id_annee: int):
         existing = self.cours_repository.findBy(
+            load_relations=False,
             jour=jour, heure_deb=heure_deb, heure_fin=heure_fin,
             id_enseignant=id_enseignant, id_annee=id_annee,
         )
@@ -150,7 +152,7 @@ class CoursService:
                 if update_data:
                     self.cours_repository.updateMany({"id": item.id}, update_data)
             self._session().commit()
-            return [self.cours_repository.findOne(item.id) for item in data.cours]
+            return [self.cours_repository.findOne(item.id, load_relations=False) for item in data.cours]
         except HTTPException as http_exec:
             self._session().rollback()
             raise http_exec

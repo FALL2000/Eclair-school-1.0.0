@@ -1,5 +1,6 @@
 from typing import Generic, TypeVar, Type, List, Optional, Any
-from sqlalchemy import and_
+from sqlalchemy import and_, inspect as sa_inspect
+from sqlalchemy.orm import noload
 from sqlmodel import Session, delete, insert, select, func, update
 
 # T représente le modèle SQLModel (ex: Eleve, User)
@@ -11,25 +12,40 @@ class BaseRepository(Generic[T]):
         self.model = model
         self.session = session
 
-    def findOne(self, id: Any) -> Optional[T]:
-        """Récupère un élément par son ID (clé primaire)."""
+    def _noload_options(self):
+        """Retourne les options noload pour toutes les relations du modèle."""
+        mapper = sa_inspect(self.model)
+        return [noload(getattr(self.model, rel.key)) for rel in mapper.relationships]
+
+    def findOne(self, id: Any, load_relations: bool = True) -> Optional[T]:
+        """Récupère un élément par son ID (clé primaire).
+        load_relations=False évite le chargement des relations."""
+        if not load_relations:
+            statement = select(self.model).where(self.model.id == id).options(*self._noload_options())
+            return self.session.exec(statement).first()
         return self.session.get(self.model, id)
 
-    def findAll(self, limit: Optional[int] = None, offset: Optional[int] = None) -> List[T]:
-        """Récupère tous les éléments avec pagination optionnelle."""
+    def findAll(self, limit: Optional[int] = None, offset: Optional[int] = None, load_relations: bool = True) -> List[T]:
+        """Récupère tous les éléments avec pagination optionnelle.
+        load_relations=False évite le chargement des relations (pas de jointure ni de requête supplémentaire)."""
         statement = select(self.model)
+        if not load_relations:
+            statement = statement.options(*self._noload_options())
         if offset is not None:
             statement = statement.offset(offset)
         if limit is not None:
             statement = statement.limit(limit)
         return self.session.exec(statement).all()
 
-    def findBy(self, **kwargs) -> List[T]:
+    def findBy(self, load_relations: bool = True, **kwargs) -> List[T]:
         """
-        Recherche dynamique. 
+        Recherche dynamique.
         Exemple d'usage : repo.findBy(email="test@test.com", is_active=True)
+        load_relations=False évite le chargement des relations (pas de jointure ni de requête supplémentaire).
         """
         statement = select(self.model)
+        if not load_relations:
+            statement = statement.options(*self._noload_options())
         for key, value in kwargs.items():
             if hasattr(self.model, key):
                 statement = statement.where(getattr(self.model, key) == value)

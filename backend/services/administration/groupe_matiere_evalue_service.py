@@ -151,7 +151,7 @@ class GroupeMatiereEvalueService:
 
     def get_all_groupe_matiere_evalue(self):
         try:
-            db_groupes_matiere_evalue = self.groupe_matiere_evalue_repository.findAll()
+            db_groupes_matiere_evalue = self.groupe_matiere_evalue_repository.findAll(load_relations=False)
             return db_groupes_matiere_evalue
         except HTTPException as http_exec:
             raise http_exec

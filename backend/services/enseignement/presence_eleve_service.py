@@ -96,7 +96,7 @@ class PresenceEleveService:
             self.presence_eleve_repository.InsertMany(data_list)
             self._session().commit()
             return self.presence_eleve_repository.findBy(
-                id_cours=data.id_cours, date_cours=data.date_cours
+                load_relations=False, id_cours=data.id_cours, date_cours=data.date_cours
             )
         except HTTPException as http_exec:
             self._session().rollback()
@@ -114,14 +114,14 @@ class PresenceEleveService:
         """Modifie en masse les présences des élèves"""
         try:
             for item in data.presences:
-                db_presence = self.presence_eleve_repository.findOne(item.id)
+                db_presence = self.presence_eleve_repository.findOne(item.id, load_relations=False)
                 self._check_presence_exists(db_presence)
                 update_data = item.model_dump(exclude_unset=True, exclude={"id"})
                 if update_data:
                     self.presence_eleve_repository.updateMany({"id": item.id}, update_data)
             self._session().commit()
             return [
-                self.presence_eleve_repository.findOne(item.id) for item in data.presences
+                self.presence_eleve_repository.findOne(item.id, load_relations=False) for item in data.presences
             ]
         except HTTPException as http_exec:
             self._session().rollback()

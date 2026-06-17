@@ -119,7 +119,7 @@ class CycleService:
     def get_all_cycle(self):
         """Recupere tous les cycles en BD"""
         try:
-            db_cycles = self.cycle_repository.findAll()
+            db_cycles = self.cycle_repository.findAll(load_relations=False)
             return db_cycles
         except HTTPException as http_exec:
             raise http_exec
