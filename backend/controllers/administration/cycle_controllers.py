@@ -99,4 +99,4 @@ def get_all_cycle_with_niveau_and_classe(
     cycle_service: Annotated[CycleService, Depends(get_cycle_service)],
     _: Annotated[dict[str, Any], Depends(check_permission_user)],
 ):
-    return cycle_service.get_all_cycle()
+    return cycle_service.get_all_cycle(True)

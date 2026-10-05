@@ -108,4 +108,4 @@ def get_all_groupe_matiere_evalue_with_matiere(
     groupe_matiere_evalue_service: Annotated[GroupeMatiereEvalueService, Depends(get_groupe_matiere_evalue_service)],
     _: Annotated[dict[str, Any], Depends(check_permission_user)],
 ):
-    return groupe_matiere_evalue_service.get_all_groupe_matiere_evalue()
+    return groupe_matiere_evalue_service.get_all_groupe_matiere_evalue(True)

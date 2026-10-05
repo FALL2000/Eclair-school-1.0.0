@@ -116,10 +116,11 @@ class CycleService:
             raise HTTPException(
                 status_code=500, detail=f"Une erreur lors de la recuperation  du cycle: {str(e)}")
 
-    def get_all_cycle(self):
+    def get_all_cycle(self, with_relations: bool = False):
         """Recupere tous les cycles en BD"""
         try:
-            db_cycles = self.cycle_repository.findAll(load_relations=False)
+            db_cycles = self.cycle_repository.findAll(
+                load_relations=with_relations)
             return db_cycles
         except HTTPException as http_exec:
             raise http_exec

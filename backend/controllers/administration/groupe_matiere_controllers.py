@@ -102,4 +102,4 @@ def get_all_groupe_matiere_with_matiere(
     groupe_matiere_service: Annotated[GroupeMatiereService, Depends(get_groupe_matiere_service)],
     _: Annotated[dict[str, Any], Depends(check_permission_user)],
 ):
-    return groupe_matiere_service.get_all_groupe_matiere()
+    return groupe_matiere_service.get_all_groupe_matiere(True)

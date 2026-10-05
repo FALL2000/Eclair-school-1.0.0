@@ -117,9 +117,10 @@ class GroupeMatiereService:
             raise HTTPException(
                 status_code=500, detail=f"Une erreur lors de la recuperation du groupe de matiere: {str(e)}")
 
-    def get_all_groupe_matiere(self):
+    def get_all_groupe_matiere(self, with_relations: bool = False):
         try:
-            db_groupe_matieres = self.groupe_matiere_repository.findAll(load_relations=False)
+            db_groupe_matieres = self.groupe_matiere_repository.findAll(
+                load_relations=with_relations)
             return db_groupe_matieres
         except HTTPException as http_exec:
             raise http_exec
