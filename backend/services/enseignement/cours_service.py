@@ -1,3 +1,4 @@
+from datetime import time
 from typing import Optional
 
 from fastapi import HTTPException
@@ -42,11 +43,10 @@ class CoursService:
                 },
             )
 
-    def _check_periode_classe(self, jour: str, heure_deb, heure_fin, id_classe: int, id_annee: int):
-        existing = self.cours_repository.findBy(
-            load_relations=False,
+    def _check_periode_classe(self, jour: str, heure_deb: time, heure_fin: time, id_classe: int, id_annee: int):
+        existing = self.cours_repository.find_chevauchement(
             jour=jour, heure_deb=heure_deb, heure_fin=heure_fin,
-            id_classe=id_classe, id_annee=id_annee,
+            id_annee=id_annee, id_classe=id_classe,
         )
         if existing:
             raise HTTPException(
@@ -57,11 +57,10 @@ class CoursService:
                 },
             )
 
-    def _check_enseignant_periode(self, jour: str, heure_deb, heure_fin, id_enseignant: int, id_annee: int):
-        existing = self.cours_repository.findBy(
-            load_relations=False,
+    def _check_enseignant_periode(self, jour: str, heure_deb: time, heure_fin: time, id_enseignant: int, id_annee: int):
+        existing = self.cours_repository.find_chevauchement(
             jour=jour, heure_deb=heure_deb, heure_fin=heure_fin,
-            id_enseignant=id_enseignant, id_annee=id_annee,
+            id_annee=id_annee, id_enseignant=id_enseignant,
         )
         if existing:
             raise HTTPException(

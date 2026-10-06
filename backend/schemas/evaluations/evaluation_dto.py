@@ -35,8 +35,10 @@ class EvaluationUpdateDTO(SQLModel):
     libelle: Optional[str] = None
     date_deb: Optional[date] = None
     date_fin: Optional[date] = None
+    id_trimestre: Optional[int] = None
 
 
 class EvaluationResponseDTO(EvaluationBase):
     id: int
+    id_trimestre: int
 

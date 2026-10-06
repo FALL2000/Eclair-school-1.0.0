@@ -23,6 +23,7 @@ from controllers.administration.serie_controllers import router as serie_router
 from controllers.administration.trimestre_controllers import router as trimestre_router
 from controllers.authentication.auth_controllers import router as auth_router
 from controllers.administration.annee_controllers import router as annee_router
+from controllers.evaluations.evaluation_controllers import router as evaluation_router
 
 router = APIRouter()
 
@@ -63,6 +64,8 @@ def include_api_routes() -> APIRouter:
     router.include_router(cours_router, prefix="/cours", tags=["cours"])
     router.include_router(presence_eleve_router, prefix="/presence-eleve", tags=["presences eleves"])
     router.include_router(presence_enseignant_router, prefix="/presence-enseignant", tags=["presences enseignants"])
+    router.include_router(
+        evaluation_router, prefix="/evaluation", tags=["evaluations"])
 
     return router
 
