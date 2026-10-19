@@ -17,15 +17,16 @@ class BaseRepository(Generic[T]):
         mapper = sa_inspect(self.model)
         return [noload(getattr(self.model, rel.key)) for rel in mapper.relationships]
 
-    def findOne(self, id: Any, load_relations: bool = True) -> Optional[T]:
+    def findOne(self, id: Any, load_relations: bool = False) -> Optional[T]:
         """Récupère un élément par son ID (clé primaire).
         load_relations=False évite le chargement des relations."""
         if not load_relations:
-            statement = select(self.model).where(self.model.id == id).options(*self._noload_options())
+            statement = select(self.model).where(
+                self.model.id == id).options(*self._noload_options())
             return self.session.exec(statement).first()
         return self.session.get(self.model, id)
 
-    def findAll(self, limit: Optional[int] = None, offset: Optional[int] = None, load_relations: bool = True) -> List[T]:
+    def findAll(self, limit: Optional[int] = None, offset: Optional[int] = None, load_relations: bool = False) -> List[T]:
         """Récupère tous les éléments avec pagination optionnelle.
         load_relations=False évite le chargement des relations (pas de jointure ni de requête supplémentaire)."""
         statement = select(self.model)
@@ -37,7 +38,7 @@ class BaseRepository(Generic[T]):
             statement = statement.limit(limit)
         return self.session.exec(statement).all()
 
-    def findBy(self, load_relations: bool = True, **kwargs) -> List[T]:
+    def findBy(self, load_relations: bool = False, **kwargs) -> List[T]:
         """
         Recherche dynamique.
         Exemple d'usage : repo.findBy(email="test@test.com", is_active=True)
