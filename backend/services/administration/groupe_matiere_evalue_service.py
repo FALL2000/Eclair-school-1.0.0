@@ -118,6 +118,7 @@ class GroupeMatiereEvalueService:
             delete_groupe_matiere_evalue = self.groupe_matiere_evalue_repository.deleteOne(
                 groupe_matiere_evalue_id)
             if delete_groupe_matiere_evalue:
+                self._session().commit()
                 return {
                     "success": True,
                     "detail": {"id": groupe_matiere_evalue_id, "message": "Groupe de matiere evalue supprime"}

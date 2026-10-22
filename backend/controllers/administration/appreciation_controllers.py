@@ -1,10 +1,11 @@
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
 from common.dependencies import check_permission_user, get_db
 from repositories.administration.appreciation_repository import AppreciationRepository
+from repositories.administration.bareme_repository import BaremeRepository
 from schemas.administration.appreciation_dto import (
     AppreciationCreateDTO,
     AppreciationResponseDTO,
@@ -17,7 +18,8 @@ router = APIRouter()
 
 def get_appreciation_service(db: Session = Depends(get_db)):
     appreciation_repo = AppreciationRepository(db)
-    return AppreciationService(appreciation_repo)
+    bareme_repo = BaremeRepository(db)
+    return AppreciationService(appreciation_repo, bareme_repo)
 
 
 @router.post(
@@ -30,8 +32,9 @@ def add_appreciation(
     appreciation_in: AppreciationCreateDTO,
     appreciation_service: Annotated[AppreciationService, Depends(get_appreciation_service)],
     _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    id_bareme: Annotated[int, Query(description="Id du barème de notation de l'appréciation")] = ...,
 ):
-    return appreciation_service.add_appreciation(appreciation_in)
+    return appreciation_service.add_appreciation(appreciation_in, id_bareme)
 
 
 @router.patch(
@@ -85,5 +88,6 @@ def get_one_appreciation(
 def get_all_appreciation(
     appreciation_service: Annotated[AppreciationService, Depends(get_appreciation_service)],
     _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    id_bareme: Annotated[int | None, Query(description="Filtrer par barème (optionnel)")] = None,
 ):
-    return appreciation_service.get_all_appreciation()
+    return appreciation_service.get_all_appreciation(id_bareme)

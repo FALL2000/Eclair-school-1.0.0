@@ -87,6 +87,7 @@ class CycleService:
                 )
             delete_cycle = self.cycle_repository.deleteOne(cycle_id)
             if delete_cycle:
+                self._session().commit()
                 return {
                     "success": True,
                     "detail": {"id": cycle_id, "message": "cycle supprimé"}

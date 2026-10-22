@@ -36,7 +36,9 @@ class MatiereEvalueUpdateDTO(SQLModel):
     libelle: Optional[str] = None
     type: Optional[str] = None
     coefficient: Optional[int] = None
+    id_bareme: Optional[int] = None
 
 
 class MatiereEvalueResponseDTO(MatiereEvalueBase):
     id: int
+    id_bareme: int

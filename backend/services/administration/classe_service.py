@@ -87,6 +87,7 @@ class ClasseService:
                 )
             delete_classe = self.classe_repository.deleteOne(classe_id)
             if delete_classe:
+                self._session().commit()
                 return {
                     "success": True,
                     "detail": {"id": classe_id, "message": "Classe supprimée"}

@@ -85,6 +85,7 @@ class SectionService:
                 )
             delete_section = self.section_repository.deleteOne(section_id)
             if delete_section:
+                self._session().commit()
                 return {
                     "success": True,
                     "detail": {"id": section_id, "message": "Section supprimée"}

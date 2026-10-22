@@ -86,6 +86,7 @@ class TrimestreService:
             delete_trimestre = self.trimestre_repository.deleteOne(
                 trimestre_id)
             if delete_trimestre:
+                self._session().commit()
                 return {
                     "success": True,
                     "detail": {"id": trimestre_id, "message": "Trimestre supprimé"}

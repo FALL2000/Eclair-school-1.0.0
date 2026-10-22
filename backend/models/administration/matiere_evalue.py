@@ -5,6 +5,7 @@ from sqlmodel import Field, Relationship
 from schemas.administration.matiere_evalue_dto import MatiereEvalueBase
 
 if TYPE_CHECKING:
+    from models.administration.bareme import Bareme
     from models.administration.groupe_matiere_evalue import GroupeMatiereEvalue
     from models.evaluations.notation import Notation
 
@@ -20,7 +21,12 @@ class MatiereEvalue(MatiereEvalueBase, table=True):
             "groupe_matiere_evalue.id", ondelete="CASCADE")),
         description="Id du groupe de matière évaluée"
     )
+    id_bareme: int = Field(
+        foreign_key="bareme.id",
+        description="Id du barème de notation de la matière évaluée",
+    )
 
     groupe_matiere: "GroupeMatiereEvalue" = Relationship(
         back_populates="matiere_evalues")
     notations: list["Notation"] = Relationship(back_populates="matiere_evalue")
+    bareme: "Bareme" = Relationship(back_populates="matieres_evaluees")

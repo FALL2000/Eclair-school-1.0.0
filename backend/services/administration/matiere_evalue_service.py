@@ -2,6 +2,7 @@ from fastapi import HTTPException
 
 from models.administration.matiere_evalue import MatiereEvalue
 from repositories.administration.annee_repository import AnneeRepository
+from repositories.administration.bareme_repository import BaremeRepository
 from repositories.administration.groupe_matiere_evalue_repository import GroupeMatiereEvalueRepository
 from repositories.administration.matiere_evalue_repository import MatiereEvalueRepository
 from schemas.administration.matiere_evalue_dto import MatiereEvalueCreateDTO, MatiereEvalueUpdateDTO
@@ -13,10 +14,12 @@ class MatiereEvalueService:
         matiere_evalue_repository: MatiereEvalueRepository,
         groupe_matiere_evalue_repository: GroupeMatiereEvalueRepository,
         annee_repository: AnneeRepository,
+        bareme_repository: BaremeRepository,
     ):
         self.matiere_evalue_repository = matiere_evalue_repository
         self.groupe_matiere_evalue_repository = groupe_matiere_evalue_repository
         self.annee_repository = annee_repository
+        self.bareme_repository = bareme_repository
 
     def _session(self):
         return self.matiere_evalue_repository.session
@@ -52,12 +55,24 @@ class MatiereEvalueService:
                 }
             )
 
-    def add_matiere_evalue(self, matiere_evalue_in: MatiereEvalueCreateDTO, groupe_matiere_evalue_id: int):
+    def _check_bareme_exists(self, bareme_id: int):
+        if self.bareme_repository.findOne(bareme_id, load_relations=False) is None:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error_code": "BAREME_NOT_FOUND",
+                    "message": "Bareme non trouve"
+                }
+            )
+
+    def add_matiere_evalue(self, matiere_evalue_in: MatiereEvalueCreateDTO, groupe_matiere_evalue_id: int, bareme_id: int):
         try:
             self._check_code_exists(matiere_evalue_in.code)
             self._check_groupe_matiere_evalue_exists(groupe_matiere_evalue_id)
+            self._check_bareme_exists(bareme_id)
             matiere_evalue_dict = matiere_evalue_in.model_dump()
             matiere_evalue_dict["id_groupe_matiere"] = groupe_matiere_evalue_id
+            matiere_evalue_dict["id_bareme"] = bareme_id
             db_matiere_evalue = MatiereEvalue.model_validate(
                 matiere_evalue_dict)
             new_matiere_evalue = self.matiere_evalue_repository.save(
@@ -78,7 +93,9 @@ class MatiereEvalueService:
             self._check_matiere_evalue_exists(db_matiere_evalue)
             if matiere_evalue_update.code is not None and matiere_evalue_update.code != db_matiere_evalue.code:
                 self._check_code_exists(matiere_evalue_update.code)
-            update_data = matiere_evalue_update.model_dump(exclude_unset=True)
+            if matiere_evalue_update.id_bareme is not None and matiere_evalue_update.id_bareme != db_matiere_evalue.id_bareme:
+                self._check_bareme_exists(matiere_evalue_update.id_bareme)
+            update_data = matiere_evalue_update.model_dump(exclude_unset=True, exclude_none=True)
             for key, value in update_data.items():
                 setattr(db_matiere_evalue, key, value)
             new_matiere_evalue = self.matiere_evalue_repository.save(
@@ -108,6 +125,7 @@ class MatiereEvalueService:
             delete_matiere_evalue = self.matiere_evalue_repository.deleteOne(
                 matiere_evalue_id)
             if delete_matiere_evalue:
+                self._session().commit()
                 return {
                     "success": True,
                     "detail": {"id": matiere_evalue_id, "message": "Matiere evaluee supprimee"}

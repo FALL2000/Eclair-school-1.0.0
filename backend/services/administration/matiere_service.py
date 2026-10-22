@@ -102,6 +102,7 @@ class MatiereService:
                 )
             delete_matiere = self.matiere_repository.deleteOne(matiere_id)
             if delete_matiere:
+                self._session().commit()
                 return {
                     "success": True,
                     "detail": {"id": matiere_id, "message": "Matiere supprimee"}

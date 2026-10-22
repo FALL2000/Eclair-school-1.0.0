@@ -5,6 +5,7 @@ from sqlmodel import Session
 
 from common.dependencies import check_permission_user, get_db
 from repositories.administration.annee_repository import AnneeRepository
+from repositories.administration.bareme_repository import BaremeRepository
 from repositories.administration.groupe_matiere_evalue_repository import GroupeMatiereEvalueRepository
 from repositories.administration.matiere_evalue_repository import MatiereEvalueRepository
 from schemas.administration.matiere_evalue_dto import (
@@ -21,7 +22,8 @@ def get_matiere_evalue_service(db: Session = Depends(get_db)):
     matiere_evalue_repo = MatiereEvalueRepository(db)
     groupe_matiere_evalue_repo = GroupeMatiereEvalueRepository(db)
     annee_repo = AnneeRepository(db)
-    return MatiereEvalueService(matiere_evalue_repo, groupe_matiere_evalue_repo, annee_repo)
+    bareme_repo = BaremeRepository(db)
+    return MatiereEvalueService(matiere_evalue_repo, groupe_matiere_evalue_repo, annee_repo, bareme_repo)
 
 
 @router.post(
@@ -36,8 +38,10 @@ def add_matiere_evalue(
     _: Annotated[dict[str, Any], Depends(check_permission_user)],
     groupe_matiere_evalue_id: Annotated[int, Query(
         description="Groupe de matiere evalue auquel la matiere doit etre ajoute")] = ...,
+    bareme_id: Annotated[int, Query(
+        description="Bareme de notation de la matiere evaluee")] = ...,
 ):
-    return matiere_evalue_service.add_matiere_evalue(matiere_evalue_in, groupe_matiere_evalue_id)
+    return matiere_evalue_service.add_matiere_evalue(matiere_evalue_in, groupe_matiere_evalue_id, bareme_id)
 
 
 @router.patch(

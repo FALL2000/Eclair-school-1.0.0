@@ -85,6 +85,7 @@ class SerieService:
                 )
             delete_serie = self.serie_repository.deleteOne(serie_id)
             if delete_serie:
+                self._session().commit()
                 return {
                     "success": True,
                     "detail": {"id": serie_id, "message": "Série supprimée"}

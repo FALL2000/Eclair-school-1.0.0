@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from models.administration.annee import Annee
     from models.administration.classe import Classe
     from models.evaluations.evaluation import Evaluation
+    from models.administration.discipline_decision import DisciplineDecision
 
 
 class DisciplineEleve(DisciplineEleveBase, table=True):
@@ -40,8 +41,16 @@ class DisciplineEleve(DisciplineEleveBase, table=True):
         foreign_key="evaluation.id",
         description="Id de l'évaluation",
     )
+    id_discipline_decision: Optional[int] = Field(
+        default=None,
+        foreign_key="discipline_decision.id",
+        nullable=True,
+        description="Id de la décision disciplinaire correspondant au nombre total d'heures d'absence",
+    )
 
     eleve: "Eleve" = Relationship(back_populates="disciplines")
     annee: "Annee" = Relationship(back_populates="disciplines")
     classe: "Classe" = Relationship(back_populates="disciplines")
     evaluation: "Evaluation" = Relationship(back_populates="disciplines")
+    discipline_decision: Optional["DisciplineDecision"] = Relationship(
+        back_populates="disciplines_eleves")

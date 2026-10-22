@@ -11,6 +11,8 @@ from controllers.eleve.eleve_controllers import router as eleve_router
 from controllers.inscription.inscription_controllers import router as inscription_router
 from controllers.administration.user_controllers import router as user_router
 from controllers.administration.appreciation_controllers import router as appreciation_router
+from controllers.administration.bareme_controllers import router as bareme_router
+from controllers.administration.discipline_decision_controllers import router as discipline_decision_router
 from controllers.administration.classe_controllers import router as classe_router
 from controllers.administration.cycle_controllers import router as cycle_router
 from controllers.administration.groupe_matiere_controllers import router as groupe_matiere_router
@@ -24,6 +26,7 @@ from controllers.administration.trimestre_controllers import router as trimestre
 from controllers.authentication.auth_controllers import router as auth_router
 from controllers.administration.annee_controllers import router as annee_router
 from controllers.evaluations.evaluation_controllers import router as evaluation_router
+from controllers.evaluations.discipline_eleve_controllers import router as discipline_eleve_router
 
 router = APIRouter()
 
@@ -38,6 +41,9 @@ def include_api_routes() -> APIRouter:
     router.include_router(annee_router, prefix="/annee", tags=["annees"])
     router.include_router(appreciation_router,
                           prefix="/appreciation", tags=["appreciations"])
+    router.include_router(bareme_router, prefix="/bareme", tags=["baremes"])
+    router.include_router(discipline_decision_router,
+                          prefix="/discipline-decision", tags=["decisions disciplinaires"])
     router.include_router(section_router, prefix="/section", tags=["sections"])
     router.include_router(serie_router, prefix="/serie", tags=["series"])
     router.include_router(cycle_router, prefix="/cycle", tags=["cycles"])
@@ -66,6 +72,8 @@ def include_api_routes() -> APIRouter:
     router.include_router(presence_enseignant_router, prefix="/presence-enseignant", tags=["presences enseignants"])
     router.include_router(
         evaluation_router, prefix="/evaluation", tags=["evaluations"])
+    router.include_router(
+        discipline_eleve_router, prefix="/discipline-eleve", tags=["disciplines eleves"])
 
     return router
 

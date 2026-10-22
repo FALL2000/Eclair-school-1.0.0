@@ -88,6 +88,7 @@ class GroupeMatiereService:
             delete_groupe_matiere = self.groupe_matiere_repository.deleteOne(
                 groupe_matiere_id)
             if delete_groupe_matiere:
+                self._session().commit()
                 return {
                     "success": True,
                     "detail": {"id": groupe_matiere_id, "message": "Groupe de matiere supprime"}

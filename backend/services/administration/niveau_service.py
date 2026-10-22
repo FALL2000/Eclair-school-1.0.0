@@ -88,6 +88,7 @@ class NiveauService:
                 )
             delete_niveau = self.niveau_repository.deleteOne(niveau_id)
             if delete_niveau:
+                self._session().commit()
                 return {
                     "success": True,
                     "detail": {"id": niveau_id, "message": "Niveau supprimé"}
