@@ -3,7 +3,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.administration.annee_repository import AnneeRepository
 from repositories.administration.groupe_matiere_repository import GroupeMatiereRepository
 from schemas.administration.groupe_matiere_dto import (
@@ -32,7 +33,7 @@ def get_groupe_matiere_service(db: Session = Depends(get_db)):
 def add_groupe_matiere(
     groupe_matiere_in: GroupeMatiereCreateDTO,
     groupe_matiere_service: Annotated[GroupeMatiereService, Depends(get_groupe_matiere_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.GROUPE_MATIERE, Action.AJOUTER))],
 ):
     return groupe_matiere_service.add_groupe_matiere(groupe_matiere_in)
 
@@ -47,7 +48,7 @@ def update_groupe_matiere(
     groupe_matiere_id: int,
     groupe_matiere_update: GroupeMatiereUpdateDTO,
     groupe_matiere_service: Annotated[GroupeMatiereService, Depends(get_groupe_matiere_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.GROUPE_MATIERE, Action.MODIFIER))],
 ):
     return groupe_matiere_service.update_groupe_matiere(groupe_matiere_update, groupe_matiere_id)
 
@@ -60,7 +61,7 @@ def update_groupe_matiere(
 def delete_groupe_matiere(
     groupe_matiere_id: int,
     groupe_matiere_service: Annotated[GroupeMatiereService, Depends(get_groupe_matiere_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.GROUPE_MATIERE, Action.SUPPRIMER))],
 ):
     return groupe_matiere_service.delete_groupe_matiere(groupe_matiere_id)
 
@@ -74,7 +75,7 @@ def delete_groupe_matiere(
 def get_one_groupe_matiere(
     groupe_matiere_id: int,
     groupe_matiere_service: Annotated[GroupeMatiereService, Depends(get_groupe_matiere_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.GROUPE_MATIERE, Action.CONSULTER))],
 ):
     return groupe_matiere_service.get_one_groupe_matiere(groupe_matiere_id)
 
@@ -87,7 +88,7 @@ def get_one_groupe_matiere(
 )
 def get_all_groupe_matiere(
     groupe_matiere_service: Annotated[GroupeMatiereService, Depends(get_groupe_matiere_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.GROUPE_MATIERE, Action.CONSULTER))],
 ):
     return groupe_matiere_service.get_all_groupe_matiere()
 
@@ -100,6 +101,6 @@ def get_all_groupe_matiere(
 )
 def get_all_groupe_matiere_with_matiere(
     groupe_matiere_service: Annotated[GroupeMatiereService, Depends(get_groupe_matiere_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.GROUPE_MATIERE, Action.CONSULTER))],
 ):
     return groupe_matiere_service.get_all_groupe_matiere(True)

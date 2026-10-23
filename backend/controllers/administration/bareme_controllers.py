@@ -3,7 +3,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.administration.bareme_repository import BaremeRepository
 from schemas.administration.bareme_dto import (
     BaremeCreateDTO,
@@ -29,7 +30,7 @@ def get_bareme_service(db: Session = Depends(get_db)):
 def add_bareme(
     bareme_in: BaremeCreateDTO,
     bareme_service: Annotated[BaremeService, Depends(get_bareme_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.BAREME, Action.AJOUTER))],
 ):
     return bareme_service.add_bareme(bareme_in)
 
@@ -44,7 +45,7 @@ def update_bareme(
     bareme_id: int,
     bareme_update: BaremeUpdateDTO,
     bareme_service: Annotated[BaremeService, Depends(get_bareme_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.BAREME, Action.MODIFIER))],
 ):
     return bareme_service.update_bareme(bareme_update, bareme_id)
 
@@ -57,7 +58,7 @@ def update_bareme(
 def delete_bareme(
     bareme_id: int,
     bareme_service: Annotated[BaremeService, Depends(get_bareme_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.BAREME, Action.SUPPRIMER))],
 ):
     return bareme_service.delete_bareme(bareme_id)
 
@@ -71,7 +72,7 @@ def delete_bareme(
 def get_one_bareme(
     bareme_id: int,
     bareme_service: Annotated[BaremeService, Depends(get_bareme_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.BAREME, Action.CONSULTER))],
 ):
     return bareme_service.get_one_bareme(bareme_id)
 
@@ -84,6 +85,6 @@ def get_one_bareme(
 )
 def get_all_baremes(
     bareme_service: Annotated[BaremeService, Depends(get_bareme_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.BAREME, Action.CONSULTER))],
 ):
     return bareme_service.get_all_baremes()

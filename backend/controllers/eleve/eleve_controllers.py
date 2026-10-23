@@ -3,7 +3,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.eleve.eleve_repository import EleveRepository
 from schemas.eleve.eleve_dto import EleveResponseDTO, EleveUpdateDTO
 from services.eleve.eleve_service import EleveService
@@ -26,7 +27,7 @@ def update_eleve(
     eleve_id: int,
     eleve_update: EleveUpdateDTO,
     eleve_service: Annotated[EleveService, Depends(get_eleve_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.ELEVE, Action.MODIFIER))],
 ):
     return eleve_service.update_eleve(eleve_update, eleve_id)
 
@@ -40,7 +41,7 @@ def update_eleve(
 def get_one_eleve(
     eleve_id: int,
     eleve_service: Annotated[EleveService, Depends(get_eleve_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.ELEVE, Action.CONSULTER))],
 ):
     return eleve_service.get_one_eleve(eleve_id)
 
@@ -53,6 +54,6 @@ def get_one_eleve(
 )
 def get_all_eleve(
     eleve_service: Annotated[EleveService, Depends(get_eleve_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.ELEVE, Action.CONSULTER))],
 ):
     return eleve_service.get_all_eleve()

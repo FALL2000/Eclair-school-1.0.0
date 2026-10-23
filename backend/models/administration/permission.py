@@ -1,21 +1,20 @@
 from typing import Optional, TYPE_CHECKING
-from sqlalchemy import Column, ForeignKey, Integer
+
 from sqlmodel import Field, Relationship
+
 from schemas.administration.permission_dto import PermissionBase
 
 if TYPE_CHECKING:
-    from models.administration.role import Role
+    from models.administration.role_permission import RolePermission
 
 
 class Permission(PermissionBase, table=True):
+    """Catalogue des permissions du système (alimenté par migration)"""
     __tablename__ = "permission"
 
     id: Optional[int] = Field(
         default=None, primary_key=True, description="Id de la permission"
     )
-    id_role: int = Field(
-        sa_column=Column(Integer, ForeignKey("role.id", ondelete="CASCADE")),
-        description="Id du rôle associé",
-    )
 
-    role: "Role" = Relationship(back_populates="permissions")
+    roles_permission: list["RolePermission"] = Relationship(
+        back_populates="permission", sa_relationship_kwargs={"passive_deletes": True})

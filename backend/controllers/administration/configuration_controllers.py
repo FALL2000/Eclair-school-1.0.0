@@ -3,7 +3,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.administration.configuration_repository import ConfigurationRepository
 from schemas.administration.configuration_dto import (
     ConfigurationCreateDTO,
@@ -29,7 +30,7 @@ def get_configuration_service(db: Session = Depends(get_db)):
 def add_configuration(
     configuration_in: ConfigurationCreateDTO,
     configuration_service: Annotated[ConfigurationService, Depends(get_configuration_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.CONFIGURATION, Action.AJOUTER))],
 ):
     return configuration_service.add_configuration(configuration_in)
 
@@ -44,6 +45,6 @@ def update_configuration(
     configuration_id: int,
     configuration_update: ConfigurationUpdateDTO,
     configuration_service: Annotated[ConfigurationService, Depends(get_configuration_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.CONFIGURATION, Action.MODIFIER))],
 ):
     return configuration_service.update_configuration(configuration_id, configuration_update)

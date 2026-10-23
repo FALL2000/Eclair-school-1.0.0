@@ -3,7 +3,9 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
+from repositories.administration.annee_repository import AnneeRepository
 from repositories.scolarite.tranche_pension_repository import TranchePensionRepository
 from schemas.scolarite.tranche_pension_dto import (
     TranchePensionBulkCreateDTO,
@@ -19,7 +21,8 @@ router = APIRouter()
 
 def get_tranche_service(db: Session = Depends(get_db)):
     tranche_repo = TranchePensionRepository(db)
-    return TranchePensionService(tranche_repo)
+    annee_repo = AnneeRepository(db)
+    return TranchePensionService(tranche_repo, annee_repo)
 
 
 @router.get(
@@ -30,7 +33,7 @@ def get_tranche_service(db: Session = Depends(get_db)):
 )
 def get_all_tranches(
     tranche_service: Annotated[TranchePensionService, Depends(get_tranche_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.TRANCHE_PENSION, Action.CONSULTER))],
 ):
     return tranche_service.get_all_tranches()
 
@@ -44,7 +47,7 @@ def get_all_tranches(
 def get_tranches_by_niveau(
     id_niveau: int,
     tranche_service: Annotated[TranchePensionService, Depends(get_tranche_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.TRANCHE_PENSION, Action.CONSULTER))],
 ):
     return tranche_service.get_tranches_by_niveau(id_niveau)
 
@@ -58,7 +61,7 @@ def get_tranches_by_niveau(
 def get_one_tranche(
     tranche_id: int,
     tranche_service: Annotated[TranchePensionService, Depends(get_tranche_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.TRANCHE_PENSION, Action.CONSULTER))],
 ):
     return tranche_service.get_one_tranche(tranche_id)
 
@@ -72,7 +75,7 @@ def get_one_tranche(
 def add_tranche(
     tranche_in: TranchePensionCreateDTO,
     tranche_service: Annotated[TranchePensionService, Depends(get_tranche_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.TRANCHE_PENSION, Action.AJOUTER))],
     id_niveau: Annotated[int, Query(description="Id du niveau auquel appartient la tranche")] = ...,
 ):
     return tranche_service.add_tranche(tranche_in, id_niveau)
@@ -87,7 +90,7 @@ def add_tranche(
 def add_bulk_tranches(
     data: TranchePensionBulkCreateDTO,
     tranche_service: Annotated[TranchePensionService, Depends(get_tranche_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.TRANCHE_PENSION, Action.AJOUTER))],
     id_niveau: Annotated[int, Query(description="Id du niveau auquel appartiennent les tranches")] = ...,
 ):
     return tranche_service.add_bulk_tranches(data, id_niveau)
@@ -103,7 +106,7 @@ def update_tranche(
     tranche_id: int,
     tranche_update: TranchePensionUpdateDTO,
     tranche_service: Annotated[TranchePensionService, Depends(get_tranche_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.TRANCHE_PENSION, Action.MODIFIER))],
 ):
     return tranche_service.update_tranche(tranche_id, tranche_update)
 
@@ -117,7 +120,7 @@ def update_tranche(
 def update_bulk_tranches(
     data: TranchePensionBulkUpdateDTO,
     tranche_service: Annotated[TranchePensionService, Depends(get_tranche_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.TRANCHE_PENSION, Action.MODIFIER))],
 ):
     return tranche_service.update_bulk_tranches(data)
 
@@ -130,6 +133,6 @@ def update_bulk_tranches(
 def delete_tranche(
     tranche_id: int,
     tranche_service: Annotated[TranchePensionService, Depends(get_tranche_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.TRANCHE_PENSION, Action.SUPPRIMER))],
 ):
     return tranche_service.delete_tranche(tranche_id)

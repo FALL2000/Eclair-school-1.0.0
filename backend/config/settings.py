@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     access_refresh_token_expire_days: int = 1
     debug: bool = False
 
+    # Premier SUPER ADMIN créé (ou rattaché s'il existe déjà) par la migration des rôles et permissions
+    super_admin_username: str = ""
+    super_admin_password: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

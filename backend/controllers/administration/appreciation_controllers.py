@@ -3,7 +3,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.administration.appreciation_repository import AppreciationRepository
 from repositories.administration.bareme_repository import BaremeRepository
 from schemas.administration.appreciation_dto import (
@@ -31,7 +32,7 @@ def get_appreciation_service(db: Session = Depends(get_db)):
 def add_appreciation(
     appreciation_in: AppreciationCreateDTO,
     appreciation_service: Annotated[AppreciationService, Depends(get_appreciation_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.APPRECIATION, Action.AJOUTER))],
     id_bareme: Annotated[int, Query(description="Id du barème de notation de l'appréciation")] = ...,
 ):
     return appreciation_service.add_appreciation(appreciation_in, id_bareme)
@@ -47,7 +48,7 @@ def update_appreciation(
     appreciation_id: int,
     appreciation_update: AppreciationUpdateDTO,
     appreciation_service: Annotated[AppreciationService, Depends(get_appreciation_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.APPRECIATION, Action.MODIFIER))],
 ):
     return appreciation_service.update_appreciation(appreciation_update, appreciation_id)
 
@@ -60,7 +61,7 @@ def update_appreciation(
 def delete_appreciation(
     appreciation_id: int,
     appreciation_service: Annotated[AppreciationService, Depends(get_appreciation_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.APPRECIATION, Action.SUPPRIMER))],
 ):
     return appreciation_service.delete_appreciation(appreciation_id)
 
@@ -74,7 +75,7 @@ def delete_appreciation(
 def get_one_appreciation(
     appreciation_id: int,
     appreciation_service: Annotated[AppreciationService, Depends(get_appreciation_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.APPRECIATION, Action.CONSULTER))],
 ):
     return appreciation_service.get_one_appreciation(appreciation_id)
 
@@ -87,7 +88,7 @@ def get_one_appreciation(
 )
 def get_all_appreciation(
     appreciation_service: Annotated[AppreciationService, Depends(get_appreciation_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.APPRECIATION, Action.CONSULTER))],
     id_bareme: Annotated[int | None, Query(description="Filtrer par barème (optionnel)")] = None,
 ):
     return appreciation_service.get_all_appreciation(id_bareme)

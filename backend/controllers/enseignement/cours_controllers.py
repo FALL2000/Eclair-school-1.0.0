@@ -3,7 +3,8 @@ from typing import Annotated, Any, Optional
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.administration.annee_repository import AnneeRepository
 from repositories.enseignement.cours_repository import CoursRepository
 from schemas.enseignement.cours_dto import (
@@ -34,7 +35,7 @@ def get_cours_service(db: Session = Depends(get_db)):
 )
 def get_cours_by_enseignant(
     cours_service: Annotated[CoursService, Depends(get_cours_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.COURS, Action.CONSULTER))],
     id_enseignant: Annotated[int, Query(description="Id de l'enseignant")] = ...,
 ):
     return cours_service.get_cours_by_enseignant(id_enseignant)
@@ -48,7 +49,7 @@ def get_cours_by_enseignant(
 )
 def get_cours_by_classe(
     cours_service: Annotated[CoursService, Depends(get_cours_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.COURS, Action.CONSULTER))],
     id_classe: Annotated[int, Query(description="Id de la classe")] = ...,
     jour: Annotated[Optional[str], Query(description="Jour du cours (Lundi, Mardi, ...)")] = None,
 ):
@@ -64,7 +65,7 @@ def get_cours_by_classe(
 def add_cours(
     data: CoursCreateDTO,
     cours_service: Annotated[CoursService, Depends(get_cours_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.COURS, Action.AJOUTER))],
     id_enseignant: Annotated[int, Query(description="Id de l'enseignant")] = ...,
     id_classe: Annotated[int, Query(description="Id de la classe")] = ...,
     id_matiere: Annotated[int, Query(description="Id de la matière")] = ...,
@@ -81,7 +82,7 @@ def add_cours(
 def add_bulk_cours(
     data: CoursBulkCreateDTO,
     cours_service: Annotated[CoursService, Depends(get_cours_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.COURS, Action.AJOUTER))],
 ):
     return cours_service.add_bulk_cours(data)
 
@@ -96,7 +97,7 @@ def update_cours(
     cours_id: int,
     data: CoursUpdateDTO,
     cours_service: Annotated[CoursService, Depends(get_cours_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.COURS, Action.MODIFIER))],
 ):
     return cours_service.update_cours(cours_id, data)
 
@@ -110,7 +111,7 @@ def update_cours(
 def update_bulk_cours(
     data: CoursBulkUpdateDTO,
     cours_service: Annotated[CoursService, Depends(get_cours_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.COURS, Action.MODIFIER))],
 ):
     return cours_service.update_bulk_cours(data)
 
@@ -123,6 +124,6 @@ def update_bulk_cours(
 def delete_cours(
     cours_id: int,
     cours_service: Annotated[CoursService, Depends(get_cours_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.COURS, Action.SUPPRIMER))],
 ):
     return cours_service.delete_cours(cours_id)

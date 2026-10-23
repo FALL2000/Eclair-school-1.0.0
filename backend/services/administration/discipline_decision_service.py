@@ -3,6 +3,7 @@ from fastapi import HTTPException
 from models.administration.discipline_decision import DisciplineDecision
 from repositories.administration.annee_repository import AnneeRepository
 from repositories.administration.discipline_decision_repository import DisciplineDecisionRepository
+from repositories.evaluations.discipline_eleve_repository import DisciplineEleveRepository
 from schemas.administration.discipline_decision_dto import (
     DisciplineDecisionCreateDTO,
     DisciplineDecisionUpdateDTO,
@@ -14,9 +15,11 @@ class DisciplineDecisionService:
         self,
         discipline_decision_repository: DisciplineDecisionRepository,
         annee_repository: AnneeRepository,
+        discipline_eleve_repository: DisciplineEleveRepository,
     ):
         self.discipline_decision_repository = discipline_decision_repository
         self.annee_repository = annee_repository
+        self.discipline_eleve_repository = discipline_eleve_repository
 
     def _session(self):
         return self.discipline_decision_repository.session
@@ -33,6 +36,19 @@ class DisciplineDecisionService:
                     "message": f"Impossible de {action} une décision disciplinaire déjà attribuée à des élèves pendant l'année scolaire en cours"
                 }
             )
+
+    def _check_aucune_discipline_annee_en_cours(self):
+        """Les décisions disciplinaires ne sont plus modifiables dès que des disciplines d'élèves
+        ont été enregistrées pendant l'année scolaire en cours"""
+        for annee in self.annee_repository.findByIs_cloture(False):
+            if len(self.discipline_eleve_repository.findBy(id_annee=annee.id)) > 0:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "error_code": "DISCIPLINES_ENREGISTREES",
+                        "message": "Impossible de modifier une décision disciplinaire : des disciplines d'élèves sont déjà enregistrées pour l'année scolaire en cours"
+                    }
+                )
 
     def _check_libelle_exists(self, libelle: str):
         exist_decision = self.discipline_decision_repository.findByLibelle(libelle)
@@ -100,12 +116,24 @@ class DisciplineDecisionService:
     def update_decision(self, decision_update: DisciplineDecisionUpdateDTO, decision_id: int):
         """Modifie une décision disciplinaire en BD"""
         try:
-            db_decision = self.discipline_decision_repository.findOne(decision_id)
+            db_decision = self.discipline_decision_repository.findOne(decision_id, load_relations=True)
             self._check_decision_exists(db_decision)
-            self._check_non_attribuee_annee_en_cours(db_decision, "modifier")
+            self._check_aucune_discipline_annee_en_cours()
             if decision_update.libelle is not None and decision_update.libelle != db_decision.libelle:
                 self._check_libelle_exists(decision_update.libelle)
             update_data = decision_update.model_dump(exclude_unset=True, exclude_none=True)
+            intervalle_modifie = (
+                update_data.get("nb_heure_min", db_decision.nb_heure_min) != db_decision.nb_heure_min
+                or update_data.get("nb_heure_max", db_decision.nb_heure_max) != db_decision.nb_heure_max
+            )
+            if intervalle_modifie and len(db_decision.disciplines_eleves) > 0:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "error_code": "INTERVALLE_NON_MODIFIABLE",
+                        "message": "Impossible de modifier l'intervalle d'une décision disciplinaire déjà enregistrée pour des élèves"
+                    }
+                )
             self._check_intervalle(
                 update_data.get("nb_heure_min", db_decision.nb_heure_min),
                 update_data.get("nb_heure_max", db_decision.nb_heure_max),
@@ -126,7 +154,7 @@ class DisciplineDecisionService:
     def delete_decision(self, decision_id: int):
         """Supprime une décision disciplinaire en BD"""
         try:
-            db_decision = self.discipline_decision_repository.findOne(decision_id)
+            db_decision = self.discipline_decision_repository.findOne(decision_id, load_relations=True)
             self._check_decision_exists(db_decision)
             self._check_non_attribuee_annee_en_cours(db_decision, "supprimer")
             if len(db_decision.disciplines_eleves) > 0:

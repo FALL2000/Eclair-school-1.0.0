@@ -39,6 +39,16 @@ class UserUpdateDTO(SQLModel):
     prenom: Optional[str] = None
 
 
+class UserPasswordUpdateDTO(SQLModel):
+    ancien_mot_de_passe: str
+    nouveau_mot_de_passe: str = Field(
+        min_length=6,
+        max_length=128,
+        description="Nouveau mot de passe en clair à hasher",
+    )
+
+
 class UserResponseDTO(UserBase):
     id: int
+    is_active: bool = True
 

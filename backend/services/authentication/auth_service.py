@@ -18,6 +18,10 @@ class AuthService:
                 raise HTTPException(status_code=401, detail={
                     "error_code": "INCORRECT_CREDENTIALS", "message": "Email ou mot de passe incorrect."
                 })
+            if not user[0].is_active:
+                raise HTTPException(status_code=403, detail={
+                    "error_code": "USER_DESACTIVE", "message": "Ce compte utilisateur est désactivé."
+                })
             return create_tokens(user[0].id)
         except HTTPException as http_exec:
             raise http_exec
@@ -34,6 +38,8 @@ class AuthService:
                 raise HTTPException(
                     status_code=401, detail="Refresh token invalide ou expiré.")
             return create_tokens(payload["sub"])
+        except HTTPException as http_exec:
+            raise http_exec
         except Exception as e:
             raise HTTPException(
                 status_code=500, detail=f"Une erreur lors du rafraichissement: {str(e)}")

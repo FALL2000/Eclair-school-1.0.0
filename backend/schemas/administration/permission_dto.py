@@ -1,27 +1,33 @@
-from typing import Optional
 from sqlmodel import Field, SQLModel
 
 
 class PermissionBase(SQLModel):
-    element_name: str = Field(
+    code: str = Field(
+        unique=True,
         max_length=100,
-        description="Nom de l'élément (classe qui gere une fonctionnalites ex: eleve, matiere, enseignant etc..)",
+        description="Code unique de la permission : module:action (ex: eleve:inscrire)",
         nullable=False,
     )
-    permission_value: str = Field(
+    module: str = Field(
         max_length=50,
-        description="Valeur de permission (CREATE, VIEW, UPDATE, DELETE)",
+        description="Module concerné (ex: eleve, reglement, classe)",
         nullable=False,
     )
-
-
-class PermissionCreateDTO(PermissionBase):
-    pass
-
-
-class PermissionUpdateDTO(SQLModel):
-    element_name: Optional[str] = None
-    permission_value: Optional[str] = None
+    action: str = Field(
+        max_length=30,
+        description="Action autorisée (ajouter, modifier, supprimer, consulter, rechercher, inscrire, annuler, ...)",
+        nullable=False,
+    )
+    domaine: str = Field(
+        max_length=30,
+        description="Domaine fonctionnel (administration, securite, eleves, enseignement, evaluations, scolarite)",
+        nullable=False,
+    )
+    libelle: str = Field(
+        max_length=150,
+        description="Libellé lisible de la permission (ex: Inscrire un élève)",
+        nullable=False,
+    )
 
 
 class PermissionResponseDTO(PermissionBase):

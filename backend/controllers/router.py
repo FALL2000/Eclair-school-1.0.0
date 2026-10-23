@@ -10,6 +10,7 @@ from controllers.scolarite.tranche_pension_controllers import router as tranche_
 from controllers.eleve.eleve_controllers import router as eleve_router
 from controllers.inscription.inscription_controllers import router as inscription_router
 from controllers.administration.user_controllers import router as user_router
+from controllers.administration.role_controllers import router as role_router
 from controllers.administration.appreciation_controllers import router as appreciation_router
 from controllers.administration.bareme_controllers import router as bareme_router
 from controllers.administration.discipline_decision_controllers import router as discipline_decision_router
@@ -27,6 +28,8 @@ from controllers.authentication.auth_controllers import router as auth_router
 from controllers.administration.annee_controllers import router as annee_router
 from controllers.evaluations.evaluation_controllers import router as evaluation_router
 from controllers.evaluations.discipline_eleve_controllers import router as discipline_eleve_router
+from controllers.evaluations.notation_controllers import router as notation_router
+from controllers.evaluations.bulletin_controllers import router as bulletin_router
 
 router = APIRouter()
 
@@ -37,6 +40,7 @@ def include_api_routes() -> APIRouter:
     router.include_router(inscription_router,
                           prefix="/inscription", tags=["inscriptions"])
     router.include_router(user_router, prefix="/user", tags=["users"])
+    router.include_router(role_router, prefix="/role", tags=["roles et permissions"])
     router.include_router(auth_router, prefix="/auth", tags=["authentication"])
     router.include_router(annee_router, prefix="/annee", tags=["annees"])
     router.include_router(appreciation_router,
@@ -74,6 +78,10 @@ def include_api_routes() -> APIRouter:
         evaluation_router, prefix="/evaluation", tags=["evaluations"])
     router.include_router(
         discipline_eleve_router, prefix="/discipline-eleve", tags=["disciplines eleves"])
+    router.include_router(
+        notation_router, prefix="/notation", tags=["notations"])
+    router.include_router(
+        bulletin_router, prefix="/bulletin", tags=["bulletins"])
 
     return router
 

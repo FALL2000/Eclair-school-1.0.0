@@ -3,7 +3,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.administration.annee_repository import AnneeRepository
 from repositories.administration.trimestre_repository import TrimestreRepository
 from schemas.administration.trimestre_dto import (
@@ -31,7 +32,7 @@ def get_trimestre_service(db: Session = Depends(get_db)):
 def add_trimestre(
     trimestre_in: TrimestreCreateDTO,
     trimestre_service: Annotated[TrimestreService, Depends(get_trimestre_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.TRIMESTRE, Action.AJOUTER))],
 ):
     return trimestre_service.add_trimestre(trimestre_in)
 
@@ -46,7 +47,7 @@ def update_trimestre(
     trimestre_id: int,
     trimestre_update: TrimestreUpdateDTO,
     trimestre_service: Annotated[TrimestreService, Depends(get_trimestre_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.TRIMESTRE, Action.MODIFIER))],
 ):
     return trimestre_service.update_trimestre(trimestre_update, trimestre_id)
 
@@ -59,7 +60,7 @@ def update_trimestre(
 def delete_trimestre(
     trimestre_id: int,
     trimestre_service: Annotated[TrimestreService, Depends(get_trimestre_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.TRIMESTRE, Action.SUPPRIMER))],
 ):
     return trimestre_service.delete_trimestre(trimestre_id)
 
@@ -73,7 +74,7 @@ def delete_trimestre(
 def get_one_trimestre(
     trimestre_id: int,
     trimestre_service: Annotated[TrimestreService, Depends(get_trimestre_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.TRIMESTRE, Action.CONSULTER))],
 ):
     return trimestre_service.get_one_trimestre(trimestre_id)
 
@@ -86,6 +87,6 @@ def get_one_trimestre(
 )
 def get_all_trimestre(
     trimestre_service: Annotated[TrimestreService, Depends(get_trimestre_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.TRIMESTRE, Action.CONSULTER))],
 ):
     return trimestre_service.get_all_trimestre()

@@ -51,7 +51,7 @@ class BaremeService:
     def update_bareme(self, bareme_update: BaremeUpdateDTO, bareme_id: int):
         """Modifie un barème de notation en BD"""
         try:
-            db_bareme = self.bareme_repository.findOne(bareme_id)
+            db_bareme = self.bareme_repository.findOne(bareme_id, load_relations=True)
             self._check_bareme_exists(db_bareme)
             if bareme_update.code is not None and bareme_update.code != db_bareme.code:
                 self._check_code_exists(bareme_update.code)
@@ -86,7 +86,7 @@ class BaremeService:
     def delete_bareme(self, bareme_id: int):
         """Supprime un barème de notation en BD — impossible s'il est utilisé"""
         try:
-            db_bareme = self.bareme_repository.findOne(bareme_id)
+            db_bareme = self.bareme_repository.findOne(bareme_id, load_relations=True)
             self._check_bareme_exists(db_bareme)
             if len(db_bareme.matieres_evaluees) > 0 or len(db_bareme.appreciations) > 0:
                 raise HTTPException(

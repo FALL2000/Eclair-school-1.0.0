@@ -70,7 +70,7 @@ class PresenceEleveService:
                 filters["id_cours"] = id_cours
             if date_cours is not None:
                 filters["date_cours"] = date_cours
-            return self.presence_eleve_repository.findBy(**filters)
+            return self.presence_eleve_repository.findBy(load_relations=True, **filters)
         except Exception as e:
             raise HTTPException(
                 status_code=500,

@@ -4,7 +4,7 @@ from typing import Optional
 from pydantic import ConfigDict
 from sqlmodel import Field, SQLModel
 
-from common.enumeration import StatutReglement
+from common.enumeration import StatutPaiementTranche, StatutReglement
 
 
 class ReglementBase(SQLModel):
@@ -74,3 +74,14 @@ class ReglementParClasseResponseDTO(ReglementBase):
     id_annee: int
     id_user: Optional[int] = None
     eleve: EleveReglementDTO
+
+
+class ReglementEleveTrancheResponseDTO(SQLModel):
+    """Situation de paiement d'un élève sur une tranche de pension"""
+    eleve: EleveReglementDTO
+    id_tranche_pension: int
+    montant_tranche: float
+    montant_regle: float
+    reste_a_payer: float
+    statut_paiement: StatutPaiementTranche
+    reglements: list[ReglementResponseDTO]

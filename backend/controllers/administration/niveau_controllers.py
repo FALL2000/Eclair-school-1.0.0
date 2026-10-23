@@ -3,7 +3,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.administration.annee_repository import AnneeRepository
 from repositories.administration.niveau_repository import NiveauRepository
 from schemas.administration.niveau_dto import NiveauCreateDTO, NiveauResponseDTO, NiveauUpdateDTO
@@ -27,7 +28,7 @@ def get_niveau_service(db: Session = Depends(get_db)):
 def add_niveau(
     niveau_in: NiveauCreateDTO,
     niveau_service: Annotated[NiveauService, Depends(get_niveau_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.NIVEAU, Action.AJOUTER))],
     cycle_id: Annotated[int, Query(
         description="cycle dans lequel le niveau doit etre ajoute")] = ...,
     serie_id: Annotated[int | None, Query(
@@ -46,7 +47,7 @@ def update_niveau(
     niveau_id: int,
     niveau_update: NiveauUpdateDTO,
     niveau_service: Annotated[NiveauService, Depends(get_niveau_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.NIVEAU, Action.MODIFIER))],
 ):
     return niveau_service.update_niveau(niveau_update, niveau_id)
 
@@ -59,7 +60,7 @@ def update_niveau(
 def delete_niveau(
     niveau_id: int,
     niveau_service: Annotated[NiveauService, Depends(get_niveau_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.NIVEAU, Action.SUPPRIMER))],
 ):
     return niveau_service.delete_niveau(niveau_id)
 
@@ -73,7 +74,7 @@ def delete_niveau(
 def get_one_niveau(
     niveau_id: int,
     niveau_service: Annotated[NiveauService, Depends(get_niveau_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.NIVEAU, Action.CONSULTER))],
 ):
     return niveau_service.get_one_niveau(niveau_id)
 
@@ -86,6 +87,6 @@ def get_one_niveau(
 )
 def get_all_niveau(
     niveau_service: Annotated[NiveauService, Depends(get_niveau_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.NIVEAU, Action.CONSULTER))],
 ):
     return niveau_service.get_all_niveau()

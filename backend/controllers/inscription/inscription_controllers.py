@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
 from repositories.administration.classe_repository import ClasseRepository
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.eleve.eleve_repository import EleveRepository
 from repositories.inscription.inscription_repository import InscriptionRepository
 from schemas.inscription.inscription_dto import (
@@ -33,7 +34,7 @@ def get_inscription_service(db: Session = Depends(get_db)):
 def inscrire_nouveau_eleve(
     body: InscriptionNouveauEleveRequestDTO,
     inscription_service: Annotated[InscriptionService, Depends(get_inscription_service)],
-    current_user: Annotated[dict[str, Any], Depends(check_permission_user)],
+    current_user: Annotated[dict[str, Any], Depends(require_permission(Module.ELEVE, Action.INSCRIRE))],
 ):
     return inscription_service.inscrire_nouveau_eleve(body, current_user["user"])
 
@@ -47,7 +48,7 @@ def inscrire_nouveau_eleve(
 def finaliser_inscription_ancien_eleve(
     inscription_id: int,
     inscription_service: Annotated[InscriptionService, Depends(get_inscription_service)],
-    current_user: Annotated[dict[str, Any], Depends(check_permission_user)]
+    current_user: Annotated[dict[str, Any], Depends(require_permission(Module.ELEVE, Action.INSCRIRE))]
 ):
     return inscription_service.finaliser_inscription_ancien_eleve(inscription_id, current_user["user"])
 
@@ -61,7 +62,7 @@ def finaliser_inscription_ancien_eleve(
 def get_inscriptions_by_classe(
     id_classe: int,
     inscription_service: Annotated[InscriptionService, Depends(get_inscription_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.ELEVE, Action.CONSULTER))],
     page: Annotated[int | None, Query(
         description="page actuelle de la pagination")] = None,
     page_size: Annotated[int | None, Query(

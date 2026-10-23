@@ -3,7 +3,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.administration.annee_repository import AnneeRepository
 from repositories.administration.cycle_repository import CycleRepository
 from schemas.administration.cycle_dto import CycleCreateDTO, CycleReadWithNiveauAndClasse, CycleResponseDTO, CycleUpdateDTO
@@ -27,7 +28,7 @@ def get_cycle_service(db: Session = Depends(get_db)):
 def add_cycle(
     cycle_in: CycleCreateDTO,
     cycle_service: Annotated[CycleService, Depends(get_cycle_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.CYCLE, Action.AJOUTER))],
     section_id: Annotated[int, Query(
         description="section dans lequel le cycle doit etre ajoute")] = ...,
 ):
@@ -44,7 +45,7 @@ def update_cycle(
     cycle_id: int,
     cycle_update: CycleUpdateDTO,
     cycle_service: Annotated[CycleService, Depends(get_cycle_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.CYCLE, Action.MODIFIER))],
 ):
     return cycle_service.update_cycle(cycle_update, cycle_id)
 
@@ -57,7 +58,7 @@ def update_cycle(
 def delete_cycle(
     cycle_id: int,
     cycle_service: Annotated[CycleService, Depends(get_cycle_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.CYCLE, Action.SUPPRIMER))],
 ):
     return cycle_service.delete_cycle(cycle_id)
 
@@ -71,7 +72,7 @@ def delete_cycle(
 def get_one_cycle(
     cycle_id: int,
     cycle_service: Annotated[CycleService, Depends(get_cycle_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.CYCLE, Action.CONSULTER))],
 ):
     return cycle_service.get_one_cycle(cycle_id)
 
@@ -84,7 +85,7 @@ def get_one_cycle(
 )
 def get_all_cycle(
     cycle_service: Annotated[CycleService, Depends(get_cycle_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.CYCLE, Action.CONSULTER))],
 ):
     return cycle_service.get_all_cycle()
 
@@ -97,6 +98,6 @@ def get_all_cycle(
 )
 def get_all_cycle_with_niveau_and_classe(
     cycle_service: Annotated[CycleService, Depends(get_cycle_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.CYCLE, Action.CONSULTER))],
 ):
     return cycle_service.get_all_cycle(True)

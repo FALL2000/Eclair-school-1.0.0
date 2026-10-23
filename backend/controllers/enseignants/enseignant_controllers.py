@@ -3,7 +3,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.administration.annee_repository import AnneeRepository
 from repositories.enseignants.enseignant_repository import EnseignantRepository
 from schemas.enseignants.enseignant_dto import (
@@ -32,7 +33,7 @@ def get_enseignant_service(db: Session = Depends(get_db)):
 )
 def get_all_enseignants(
     enseignant_service: Annotated[EnseignantService, Depends(get_enseignant_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.ENSEIGNANT, Action.CONSULTER))],
     page: Annotated[int | None, Query(description="Page actuelle")] = None,
     page_size: Annotated[int | None, Query(description="Nombre d'éléments par page")] = None,
 ):
@@ -48,7 +49,7 @@ def get_all_enseignants(
 def get_one_enseignant(
     enseignant_id: int,
     enseignant_service: Annotated[EnseignantService, Depends(get_enseignant_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.ENSEIGNANT, Action.CONSULTER))],
 ):
     return enseignant_service.get_one_enseignant(enseignant_id)
 
@@ -63,7 +64,7 @@ def update_enseignant(
     enseignant_id: int,
     data: EnseignantUpdateDTO,
     enseignant_service: Annotated[EnseignantService, Depends(get_enseignant_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.ENSEIGNANT, Action.MODIFIER))],
 ):
     return enseignant_service.update_enseignant(enseignant_id, data)
 
@@ -77,7 +78,7 @@ def update_enseignant(
 def update_bulk_enseignants(
     data: EnseignantBulkUpdateDTO,
     enseignant_service: Annotated[EnseignantService, Depends(get_enseignant_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.ENSEIGNANT, Action.MODIFIER))],
 ):
     return enseignant_service.update_bulk_enseignants(data)
 
@@ -90,6 +91,6 @@ def update_bulk_enseignants(
 def delete_enseignant(
     enseignant_id: int,
     enseignant_service: Annotated[EnseignantService, Depends(get_enseignant_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.ENSEIGNANT, Action.SUPPRIMER))],
 ):
     return enseignant_service.delete_enseignant(enseignant_id)

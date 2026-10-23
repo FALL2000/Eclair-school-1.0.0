@@ -3,7 +3,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.administration.trimestre_repository import TrimestreRepository
 from repositories.evaluations.depends_evaluation_repository import DependsEvaluationRepository
 from repositories.evaluations.evaluation_repository import EvaluationRepository
@@ -38,7 +39,7 @@ def get_evaluation_service(db: Session = Depends(get_db)):
 def add_evaluation(
     evaluation_in: EvaluationCreateDTO,
     evaluation_service: Annotated[EvaluationService, Depends(get_evaluation_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.EVALUATION, Action.AJOUTER))],
     id_trimestre: Annotated[int, Query(description="Id du trimestre auquel appartient l'évaluation")] = ...,
 ):
     return evaluation_service.add_evaluation(evaluation_in, id_trimestre)
@@ -54,7 +55,7 @@ def update_evaluation(
     evaluation_id: int,
     evaluation_update: EvaluationUpdateDTO,
     evaluation_service: Annotated[EvaluationService, Depends(get_evaluation_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.EVALUATION, Action.MODIFIER))],
 ):
     return evaluation_service.update_evaluation(evaluation_id, evaluation_update)
 
@@ -67,7 +68,7 @@ def update_evaluation(
 def delete_evaluation(
     evaluation_id: int,
     evaluation_service: Annotated[EvaluationService, Depends(get_evaluation_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.EVALUATION, Action.SUPPRIMER))],
 ):
     return evaluation_service.delete_evaluation(evaluation_id)
 
@@ -81,7 +82,7 @@ def delete_evaluation(
 def get_one_evaluation(
     evaluation_id: int,
     evaluation_service: Annotated[EvaluationService, Depends(get_evaluation_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.EVALUATION, Action.CONSULTER))],
 ):
     return evaluation_service.get_one_evaluation(evaluation_id)
 
@@ -94,7 +95,7 @@ def get_one_evaluation(
 )
 def get_all_evaluations(
     evaluation_service: Annotated[EvaluationService, Depends(get_evaluation_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.EVALUATION, Action.CONSULTER))],
     id_trimestre: Annotated[int | None, Query(description="Filtrer par trimestre (optionnel)")] = None,
 ):
     return evaluation_service.get_all_evaluations(id_trimestre)
@@ -110,7 +111,7 @@ def add_dependances(
     evaluation_id: int,
     data: DependsEvaluationBulkCreateDTO,
     evaluation_service: Annotated[EvaluationService, Depends(get_evaluation_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.EVALUATION, Action.MODIFIER))],
 ):
     return evaluation_service.add_dependances(evaluation_id, data)
 
@@ -125,7 +126,7 @@ def update_dependance(
     dependance_id: int,
     dependance_update: DependsEvaluationUpdateDTO,
     evaluation_service: Annotated[EvaluationService, Depends(get_evaluation_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.EVALUATION, Action.MODIFIER))],
 ):
     return evaluation_service.update_dependance(dependance_id, dependance_update)
 
@@ -138,6 +139,6 @@ def update_dependance(
 def delete_dependance(
     dependance_id: int,
     evaluation_service: Annotated[EvaluationService, Depends(get_evaluation_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.EVALUATION, Action.MODIFIER))],
 ):
     return evaluation_service.delete_dependance(dependance_id)

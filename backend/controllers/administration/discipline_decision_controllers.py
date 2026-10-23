@@ -3,9 +3,11 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.administration.annee_repository import AnneeRepository
 from repositories.administration.discipline_decision_repository import DisciplineDecisionRepository
+from repositories.evaluations.discipline_eleve_repository import DisciplineEleveRepository
 from schemas.administration.discipline_decision_dto import (
     DisciplineDecisionCreateDTO,
     DisciplineDecisionResponseDTO,
@@ -19,7 +21,8 @@ router = APIRouter()
 def get_discipline_decision_service(db: Session = Depends(get_db)):
     discipline_decision_repo = DisciplineDecisionRepository(db)
     annee_repo = AnneeRepository(db)
-    return DisciplineDecisionService(discipline_decision_repo, annee_repo)
+    discipline_eleve_repo = DisciplineEleveRepository(db)
+    return DisciplineDecisionService(discipline_decision_repo, annee_repo, discipline_eleve_repo)
 
 
 @router.post(
@@ -31,7 +34,7 @@ def get_discipline_decision_service(db: Session = Depends(get_db)):
 def add_decision(
     decision_in: DisciplineDecisionCreateDTO,
     decision_service: Annotated[DisciplineDecisionService, Depends(get_discipline_decision_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.DISCIPLINE_DECISION, Action.AJOUTER))],
 ):
     return decision_service.add_decision(decision_in)
 
@@ -46,7 +49,7 @@ def update_decision(
     decision_id: int,
     decision_update: DisciplineDecisionUpdateDTO,
     decision_service: Annotated[DisciplineDecisionService, Depends(get_discipline_decision_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.DISCIPLINE_DECISION, Action.MODIFIER))],
 ):
     return decision_service.update_decision(decision_update, decision_id)
 
@@ -59,7 +62,7 @@ def update_decision(
 def delete_decision(
     decision_id: int,
     decision_service: Annotated[DisciplineDecisionService, Depends(get_discipline_decision_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.DISCIPLINE_DECISION, Action.SUPPRIMER))],
 ):
     return decision_service.delete_decision(decision_id)
 
@@ -73,7 +76,7 @@ def delete_decision(
 def get_one_decision(
     decision_id: int,
     decision_service: Annotated[DisciplineDecisionService, Depends(get_discipline_decision_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.DISCIPLINE_DECISION, Action.CONSULTER))],
 ):
     return decision_service.get_one_decision(decision_id)
 
@@ -86,6 +89,6 @@ def get_one_decision(
 )
 def get_all_decisions(
     decision_service: Annotated[DisciplineDecisionService, Depends(get_discipline_decision_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.DISCIPLINE_DECISION, Action.CONSULTER))],
 ):
     return decision_service.get_all_decisions()

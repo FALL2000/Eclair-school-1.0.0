@@ -19,9 +19,11 @@ class CoursRepository(BaseRepository[Cours]):
         id_annee: int,
         id_classe: int | None = None,
         id_enseignant: int | None = None,
+        exclude_id: int | None = None,
     ) -> list[Cours]:
         """Récupère les cours dont le créneau chevauche [heure_deb, heure_fin[ le même jour.
-        Deux créneaux se chevauchent si existant.heure_deb < heure_fin ET existant.heure_fin > heure_deb."""
+        Deux créneaux se chevauchent si existant.heure_deb < heure_fin ET existant.heure_fin > heure_deb.
+        exclude_id permet d'ignorer le cours en cours de modification."""
         statement = (
             select(Cours)
             .options(*self._noload_options())
@@ -36,4 +38,6 @@ class CoursRepository(BaseRepository[Cours]):
             statement = statement.where(Cours.id_classe == id_classe)
         if id_enseignant is not None:
             statement = statement.where(Cours.id_enseignant == id_enseignant)
+        if exclude_id is not None:
+            statement = statement.where(Cours.id != exclude_id)
         return self.session.exec(statement).all()

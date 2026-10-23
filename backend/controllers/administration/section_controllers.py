@@ -3,7 +3,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.administration.annee_repository import AnneeRepository
 from repositories.administration.section_repository import SectionRepository
 from schemas.administration.section_dto import SectionCreateDTO, SectionResponseDTO, SectionUpdateDTO
@@ -27,7 +28,7 @@ def get_section_service(db: Session = Depends(get_db)):
 def add_section(
     section_in: SectionCreateDTO,
     section_service: Annotated[SectionService, Depends(get_section_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.SECTION, Action.AJOUTER))],
 ):
     return section_service.add_section(section_in)
 
@@ -42,7 +43,7 @@ def update_section(
     section_id: int,
     section_update: SectionUpdateDTO,
     section_service: Annotated[SectionService, Depends(get_section_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.SECTION, Action.MODIFIER))],
 ):
     return section_service.update_section(section_update, section_id)
 
@@ -55,7 +56,7 @@ def update_section(
 def delete_section(
     section_id: int,
     section_service: Annotated[SectionService, Depends(get_section_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.SECTION, Action.SUPPRIMER))],
 ):
     return section_service.delete_section(section_id)
 
@@ -69,7 +70,7 @@ def delete_section(
 def get_one_section(
     section_id: int,
     section_service: Annotated[SectionService, Depends(get_section_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.SECTION, Action.CONSULTER))],
 ):
     return section_service.get_one_section(section_id)
 
@@ -82,6 +83,6 @@ def get_one_section(
 )
 def get_all_section(
     section_service: Annotated[SectionService, Depends(get_section_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.SECTION, Action.CONSULTER))],
 ):
     return section_service.get_all_section()

@@ -37,7 +37,7 @@ class EnseignantService:
     def get_one_enseignant(self, enseignant_id: int) -> EnseignantDetailResponseDTO:
         """Récupère un enseignant avec ses enseignements"""
         try:
-            db_enseignant = self.enseignant_repository.findOne(enseignant_id)
+            db_enseignant = self.enseignant_repository.findOne(enseignant_id, load_relations=True)
             self._check_enseignant_exists(db_enseignant)
             return db_enseignant
         except HTTPException as http_exec:
@@ -61,6 +61,7 @@ class EnseignantService:
             items = self.enseignant_repository.findAll(
                 limit=page_size,
                 offset=(page - 1) * page_size,
+                load_relations=True,
             ) if page > 0 else []
             return PaginatedEnseignant(
                 page=page,

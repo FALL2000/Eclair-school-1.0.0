@@ -6,7 +6,8 @@ from sqlmodel import Session
 from schemas.administration.annee_dto import AnneeCreateDTO, AnneeResponseDTO, AnneeUpdateDTO
 from repositories.administration.annee_repository import AnneeRepository
 from services.administration.annee_service import AnneeService
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 
 
 router = APIRouter()
@@ -26,7 +27,7 @@ def get_annee_service(db: Session = Depends(get_db)):
 def add_annee(
     annee_in: AnneeCreateDTO,
     annee_service: Annotated[AnneeService, Depends(get_annee_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)]
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.ANNEE, Action.AJOUTER))]
 ):
     """
     Les codes de response:
@@ -49,7 +50,7 @@ def update_annee(
     annee_id: int,
     annee_update: AnneeUpdateDTO,
     annee_service: Annotated[AnneeService, Depends(get_annee_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)]
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.ANNEE, Action.MODIFIER))]
 ):
     """
     Les codes de response:
@@ -71,7 +72,7 @@ def update_annee(
 )
 def get_annee_scolaire(
     annee_service: Annotated[AnneeService, Depends(get_annee_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)]
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.ANNEE, Action.CONSULTER))]
 ):
     annee_scolaire = annee_service.get_annee_scolaire()
     return annee_scolaire[0]

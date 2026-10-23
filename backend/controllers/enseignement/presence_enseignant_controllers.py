@@ -4,7 +4,8 @@ from typing import Annotated, Any, Optional
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.enseignement.presence_enseignant_repository import PresenceEnseignantRepository
 from schemas.enseignement.presence_enseignant_dto import (
     PresenceEnseignantCreateDTO,
@@ -29,7 +30,7 @@ def get_presence_enseignant_service(db: Session = Depends(get_db)):
 )
 def get_presences_enseignant(
     presence_enseignant_service: Annotated[PresenceEnseignantService, Depends(get_presence_enseignant_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.PRESENCE_ENSEIGNANT, Action.CONSULTER))],
     id_cours: Annotated[Optional[int], Query(description="Id du cours")] = None,
     date_cours: Annotated[Optional[date], Query(description="Date du cours")] = None,
 ):
@@ -45,7 +46,7 @@ def get_presences_enseignant(
 def add_presence_enseignant(
     data: PresenceEnseignantCreateDTO,
     presence_enseignant_service: Annotated[PresenceEnseignantService, Depends(get_presence_enseignant_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.PRESENCE_ENSEIGNANT, Action.AJOUTER))],
     id_cours: Annotated[int, Query(description="Id du cours")] = ...,
     id_enseignant: Annotated[int, Query(description="Id de l'enseignant")] = ...,
 ):
@@ -62,6 +63,6 @@ def update_presence_enseignant(
     presence_id: int,
     data: PresenceEnseignantUpdateDTO,
     presence_enseignant_service: Annotated[PresenceEnseignantService, Depends(get_presence_enseignant_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.PRESENCE_ENSEIGNANT, Action.MODIFIER))],
 ):
     return presence_enseignant_service.update_presence_enseignant(presence_id, data)

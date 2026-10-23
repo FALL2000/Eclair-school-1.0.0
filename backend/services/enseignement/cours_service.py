@@ -43,10 +43,23 @@ class CoursService:
                 },
             )
 
-    def _check_periode_classe(self, jour: str, heure_deb: time, heure_fin: time, id_classe: int, id_annee: int):
+    def _check_heures(self, heure_deb: time, heure_fin: time):
+        if heure_deb >= heure_fin:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error_code": "HEURES_INVALIDES",
+                    "message": "L'heure de début doit être strictement inférieure à l'heure de fin",
+                },
+            )
+
+    def _check_periode_classe(
+        self, jour: str, heure_deb: time, heure_fin: time, id_classe: int, id_annee: int,
+        exclude_id: int | None = None,
+    ):
         existing = self.cours_repository.find_chevauchement(
             jour=jour, heure_deb=heure_deb, heure_fin=heure_fin,
-            id_annee=id_annee, id_classe=id_classe,
+            id_annee=id_annee, id_classe=id_classe, exclude_id=exclude_id,
         )
         if existing:
             raise HTTPException(
@@ -57,10 +70,13 @@ class CoursService:
                 },
             )
 
-    def _check_enseignant_periode(self, jour: str, heure_deb: time, heure_fin: time, id_enseignant: int, id_annee: int):
+    def _check_enseignant_periode(
+        self, jour: str, heure_deb: time, heure_fin: time, id_enseignant: int, id_annee: int,
+        exclude_id: int | None = None,
+    ):
         existing = self.cours_repository.find_chevauchement(
             jour=jour, heure_deb=heure_deb, heure_fin=heure_fin,
-            id_annee=id_annee, id_enseignant=id_enseignant,
+            id_annee=id_annee, id_enseignant=id_enseignant, exclude_id=exclude_id,
         )
         if existing:
             raise HTTPException(
@@ -70,6 +86,18 @@ class CoursService:
                     "message": "L'enseignant a déjà un cours à cette période dans une autre classe",
                 },
             )
+
+    def _check_modification_cours(self, db_cours: Cours, update_data: dict):
+        """Vérifie les heures et les conflits de période d'un cours après application des modifications"""
+        jour = update_data.get("jour", db_cours.jour)
+        heure_deb = update_data.get("heure_deb", db_cours.heure_deb)
+        heure_fin = update_data.get("heure_fin", db_cours.heure_fin)
+        self._check_heures(heure_deb, heure_fin)
+        if (jour, heure_deb, heure_fin) != (db_cours.jour, db_cours.heure_deb, db_cours.heure_fin):
+            self._check_periode_classe(
+                jour, heure_deb, heure_fin, db_cours.id_classe, db_cours.id_annee, exclude_id=db_cours.id)
+            self._check_enseignant_periode(
+                jour, heure_deb, heure_fin, db_cours.id_enseignant, db_cours.id_annee, exclude_id=db_cours.id)
 
     def add_cours(
         self,
@@ -81,6 +109,7 @@ class CoursService:
         """Ajoute un cours en vérifiant les conflits de période"""
         try:
             annee = self._get_annee_service().get_annee_scolaire()[0]
+            self._check_heures(data.heure_deb, data.heure_fin)
             self._check_periode_classe(data.jour, data.heure_deb, data.heure_fin, id_classe, annee.id)
             self._check_enseignant_periode(data.jour, data.heure_deb, data.heure_fin, id_enseignant, annee.id)
             cours_dict = data.model_dump()
@@ -106,6 +135,7 @@ class CoursService:
             annee = self._get_annee_service().get_annee_scolaire()[0]
             new_cours_list = []
             for item in data.cours:
+                self._check_heures(item.heure_deb, item.heure_fin)
                 self._check_periode_classe(item.jour, item.heure_deb, item.heure_fin, item.id_classe, annee.id)
                 self._check_enseignant_periode(item.jour, item.heure_deb, item.heure_fin, item.id_enseignant, annee.id)
                 cours_dict = item.model_dump()
@@ -128,7 +158,8 @@ class CoursService:
         try:
             db_cours = self.cours_repository.findOne(cours_id)
             self._check_cours_exists(db_cours)
-            update_data = data.model_dump(exclude_unset=True)
+            update_data = data.model_dump(exclude_unset=True, exclude_none=True)
+            self._check_modification_cours(db_cours, update_data)
             for key, value in update_data.items():
                 setattr(db_cours, key, value)
             updated = self.cours_repository.save(db_cours)
@@ -147,8 +178,9 @@ class CoursService:
             for item in data.cours:
                 db_cours = self.cours_repository.findOne(item.id)
                 self._check_cours_exists(db_cours)
-                update_data = item.model_dump(exclude_unset=True, exclude={"id"})
+                update_data = item.model_dump(exclude_unset=True, exclude_none=True, exclude={"id"})
                 if update_data:
+                    self._check_modification_cours(db_cours, update_data)
                     self.cours_repository.updateMany({"id": item.id}, update_data)
             self._session().commit()
             return [self.cours_repository.findOne(item.id, load_relations=False) for item in data.cours]
@@ -164,7 +196,7 @@ class CoursService:
         """Récupère les cours d'un enseignant pour l'année scolaire en cours"""
         try:
             annee = self._get_annee_service().get_annee_scolaire()[0]
-            return self.cours_repository.findBy(id_enseignant=id_enseignant, id_annee=annee.id)
+            return self.cours_repository.findBy(load_relations=True, id_enseignant=id_enseignant, id_annee=annee.id)
         except HTTPException as http_exec:
             raise http_exec
         except Exception as e:
@@ -178,7 +210,7 @@ class CoursService:
             filters = {"id_classe": id_classe, "id_annee": annee.id}
             if jour is not None:
                 filters["jour"] = jour
-            return self.cours_repository.findBy(**filters)
+            return self.cours_repository.findBy(load_relations=True, **filters)
         except HTTPException as http_exec:
             raise http_exec
         except Exception as e:

@@ -3,13 +3,17 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission, require_super_admin
+from common.permissions import Action, Module
+from common.enumeration import StatutPaiementTranche
 from repositories.administration.annee_repository import AnneeRepository
 from repositories.administration.classe_repository import ClasseRepository
 from repositories.scolarite.reglement_repository import ReglementRepository
+from repositories.scolarite.tranche_pension_repository import TranchePensionRepository
 from schemas.scolarite.reglement_dto import (
     PaginatedReglement,
     ReglementCreateDTO,
+    ReglementEleveTrancheResponseDTO,
     ReglementParClasseResponseDTO,
     ReglementResponseDTO,
     ReglementUpdateDTO,
@@ -23,7 +27,8 @@ def get_reglement_service(db: Session = Depends(get_db)):
     reglement_repo = ReglementRepository(db)
     annee_repo = AnneeRepository(db)
     classe_repo = ClasseRepository(db)
-    return ReglementService(reglement_repo, annee_repo, classe_repo)
+    tranche_pension_repo = TranchePensionRepository(db)
+    return ReglementService(reglement_repo, annee_repo, classe_repo, tranche_pension_repo)
 
 
 @router.post(
@@ -35,7 +40,7 @@ def get_reglement_service(db: Session = Depends(get_db)):
 def add_reglement(
     reglement_in: ReglementCreateDTO,
     reglement_service: Annotated[ReglementService, Depends(get_reglement_service)],
-    current_user: Annotated[dict[str, Any], Depends(check_permission_user)],
+    current_user: Annotated[dict[str, Any], Depends(require_permission(Module.REGLEMENT, Action.AJOUTER))],
     id_eleve: Annotated[int, Query(description="Id de l'élève")] = ...,
     id_tranche_pension: Annotated[int, Query(description="Id de la tranche de pension")] = ...,
 ):
@@ -52,9 +57,23 @@ def update_reglement(
     reglement_id: int,
     reglement_update: ReglementUpdateDTO,
     reglement_service: Annotated[ReglementService, Depends(get_reglement_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.REGLEMENT, Action.MODIFIER))],
 ):
     return reglement_service.update_reglement(reglement_id, reglement_update)
+
+
+@router.patch(
+    "/annuler/{reglement_id}",
+    summary="Annuler un règlement",
+    status_code=200,
+    response_model=ReglementResponseDTO,
+)
+def annuler_reglement(
+    reglement_id: int,
+    reglement_service: Annotated[ReglementService, Depends(get_reglement_service)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.REGLEMENT, Action.ANNULER))],
+):
+    return reglement_service.annuler_reglement(reglement_id)
 
 
 @router.delete(
@@ -65,7 +84,7 @@ def update_reglement(
 def delete_reglement(
     reglement_id: int,
     reglement_service: Annotated[ReglementService, Depends(get_reglement_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_super_admin)],
 ):
     return reglement_service.delete_reglement(reglement_id)
 
@@ -78,7 +97,7 @@ def delete_reglement(
 )
 def get_all_reglements(
     reglement_service: Annotated[ReglementService, Depends(get_reglement_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.REGLEMENT, Action.CONSULTER))],
     page: Annotated[int | None, Query(description="Page actuelle")] = None,
     page_size: Annotated[int | None, Query(description="Nombre d'éléments par page")] = None,
 ):
@@ -94,6 +113,23 @@ def get_all_reglements(
 def get_reglements_by_classe(
     id_classe: int,
     reglement_service: Annotated[ReglementService, Depends(get_reglement_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.REGLEMENT, Action.CONSULTER))],
 ):
     return reglement_service.get_reglements_by_classe(id_classe)
+
+
+@router.get(
+    "/by-classe/{id_classe}/tranche/{id_tranche_pension}",
+    summary="Récupérer la situation de paiement d'une tranche de pension des élèves d'une classe pour l'année en cours",
+    status_code=200,
+    response_model=list[ReglementEleveTrancheResponseDTO],
+)
+def get_reglements_by_classe_tranche(
+    id_classe: int,
+    id_tranche_pension: int,
+    reglement_service: Annotated[ReglementService, Depends(get_reglement_service)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.REGLEMENT, Action.CONSULTER))],
+    statut_paiement: Annotated[StatutPaiementTranche | None, Query(
+        description="Filtrer les élèves : total (tranche totalement réglée), partiel (partiellement réglée), aucun (rien réglé)")] = None,
+):
+    return reglement_service.get_reglements_by_classe_tranche(id_classe, id_tranche_pension, statut_paiement)

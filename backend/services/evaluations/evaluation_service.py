@@ -59,6 +59,18 @@ class EvaluationService:
                 }
             )
 
+    def _check_parent_sans_notations(self, id_parent: int, error_code: str, message: str):
+        """Lève une erreur 409 si l'évaluation parente a déjà des notations"""
+        db_parent = self.evaluation_repository.findOne(id_parent, load_relations=True)
+        if db_parent is not None and len(db_parent.notations) > 0:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error_code": error_code,
+                    "message": message
+                }
+            )
+
     def _check_trimestre_exists(self, id_trimestre: int):
         if self.trimestre_repository.findOne(id_trimestre, load_relations=False) is None:
             raise HTTPException(
@@ -191,7 +203,7 @@ class EvaluationService:
     def delete_evaluation(self, evaluation_id: int):
         """Supprime une évaluation en BD — impossible si des notes ou disciplines y sont rattachées"""
         try:
-            db_evaluation = self.evaluation_repository.findOne(evaluation_id)
+            db_evaluation = self.evaluation_repository.findOne(evaluation_id, load_relations=True)
             self._check_evaluation_exists(db_evaluation)
             if len(db_evaluation.notations) > 0 or len(db_evaluation.disciplines) > 0:
                 raise HTTPException(
@@ -200,6 +212,13 @@ class EvaluationService:
                         "error_code": "CANNOT_DELETE",
                         "message": "Impossible de supprimer une évaluation à laquelle des notes ou disciplines sont rattachées"
                     }
+                )
+            # La suppression retire aussi les liens vers ses parents : interdit si un parent a déjà des notes
+            for lien in db_evaluation.dependants:
+                self._check_parent_sans_notations(
+                    lien.id_evaluation,
+                    "CANNOT_DELETE",
+                    "Impossible de supprimer une évaluation dont dépend une évaluation qui a déjà des notations",
                 )
             deleted = self.evaluation_repository.deleteOne(evaluation_id)
             if deleted:
@@ -263,7 +282,7 @@ class EvaluationService:
     def add_dependances(self, evaluation_id: int, data: DependsEvaluationBulkCreateDTO):
         """Ajoute des dépendances à une évaluation en BD"""
         try:
-            db_evaluation = self.evaluation_repository.findOne(evaluation_id)
+            db_evaluation = self.evaluation_repository.findOne(evaluation_id, load_relations=True)
             self._check_evaluation_exists(db_evaluation)
             if len(db_evaluation.notations) > 0:
                 raise HTTPException(
@@ -379,6 +398,11 @@ class EvaluationService:
                 dependance_id, load_relations=False)
             self._check_dependance_exists(db_dependance)
             if dependance_update.pourcentage is not None:
+                self._check_parent_sans_notations(
+                    db_dependance.id_evaluation,
+                    "CANNOT_UPDATE",
+                    "Impossible de modifier le pourcentage d'une dépendance dont l'évaluation parente a déjà des notations",
+                )
                 autres = self.depends_evaluation_repository.findBy(
                     load_relations=False, id_evaluation=db_dependance.id_evaluation)
                 total = sum(d.pourcentage for d in autres if d.id != dependance_id) + \
@@ -409,16 +433,11 @@ class EvaluationService:
             db_dependance = self.depends_evaluation_repository.findOne(
                 dependance_id, load_relations=False)
             self._check_dependance_exists(db_dependance)
-            db_parent = self.evaluation_repository.findOne(
-                db_dependance.id_evaluation)
-            if len(db_parent.notations) > 0:
-                raise HTTPException(
-                    status_code=409,
-                    detail={
-                        "error_code": "CANNOT_DELETE",
-                        "message": "Impossible de supprimer une dépendance dont l'évaluation parente a déjà des notations"
-                    }
-                )
+            self._check_parent_sans_notations(
+                db_dependance.id_evaluation,
+                "CANNOT_DELETE",
+                "Impossible de supprimer une dépendance dont l'évaluation parente a déjà des notations",
+            )
             deleted = self.depends_evaluation_repository.deleteOne(dependance_id)
             if deleted:
                 self._session().commit()

@@ -3,7 +3,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.administration.annee_repository import AnneeRepository
 from repositories.administration.groupe_matiere_repository import GroupeMatiereRepository
 from repositories.administration.matiere_repository import MatiereRepository
@@ -29,7 +30,7 @@ def get_matiere_service(db: Session = Depends(get_db)):
 def add_matiere(
     matiere_in: MatiereCreateDTO,
     matiere_service: Annotated[MatiereService, Depends(get_matiere_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.MATIERE, Action.AJOUTER))],
     groupe_matiere_id: Annotated[int, Query(
         description="Groupe de matiere auquel la matiere doit etre ajoute")] = ...,
 ):
@@ -46,7 +47,7 @@ def update_matiere(
     matiere_id: int,
     matiere_update: MatiereUpdateDTO,
     matiere_service: Annotated[MatiereService, Depends(get_matiere_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.MATIERE, Action.MODIFIER))],
 ):
     return matiere_service.update_matiere(matiere_update, matiere_id)
 
@@ -59,7 +60,7 @@ def update_matiere(
 def delete_matiere(
     matiere_id: int,
     matiere_service: Annotated[MatiereService, Depends(get_matiere_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.MATIERE, Action.SUPPRIMER))],
 ):
     return matiere_service.delete_matiere(matiere_id)
 
@@ -73,7 +74,7 @@ def delete_matiere(
 def get_one_matiere(
     matiere_id: int,
     matiere_service: Annotated[MatiereService, Depends(get_matiere_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.MATIERE, Action.CONSULTER))],
 ):
     return matiere_service.get_one_matiere(matiere_id)
 
@@ -86,6 +87,6 @@ def get_one_matiere(
 )
 def get_all_matiere(
     matiere_service: Annotated[MatiereService, Depends(get_matiere_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.MATIERE, Action.CONSULTER))],
 ):
     return matiere_service.get_all_matiere()

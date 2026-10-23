@@ -3,7 +3,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.administration.annee_repository import AnneeRepository
 from repositories.administration.classe_repository import ClasseRepository
 from schemas.administration.classe_dto import ClasseCreateDTO, ClasseResponseDTO, ClasseUpdateDTO
@@ -27,7 +28,7 @@ def get_classe_service(db: Session = Depends(get_db)):
 def add_classe(
     classe_in: ClasseCreateDTO,
     classe_service: Annotated[ClasseService, Depends(get_classe_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.CLASSE, Action.AJOUTER))],
     niveau_id: Annotated[int, Query(
         description="niveau dans lequel la classe doit etre ajoute")] = ...,
 ):
@@ -44,7 +45,7 @@ def update_classe(
     classe_id: int,
     classe_update: ClasseUpdateDTO,
     classe_service: Annotated[ClasseService, Depends(get_classe_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.CLASSE, Action.MODIFIER))],
 ):
     return classe_service.update_classe(classe_update, classe_id)
 
@@ -57,7 +58,7 @@ def update_classe(
 def delete_classe(
     classe_id: int,
     classe_service: Annotated[ClasseService, Depends(get_classe_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.CLASSE, Action.SUPPRIMER))],
 ):
     return classe_service.delete_classe(classe_id)
 
@@ -71,7 +72,7 @@ def delete_classe(
 def get_one_classe(
     classe_id: int,
     classe_service: Annotated[ClasseService, Depends(get_classe_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.CLASSE, Action.CONSULTER))],
 ):
     return classe_service.get_one_classe(classe_id)
 
@@ -84,6 +85,6 @@ def get_one_classe(
 )
 def get_all_classe(
     classe_service: Annotated[ClasseService, Depends(get_classe_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.CLASSE, Action.CONSULTER))],
 ):
     return classe_service.get_all_classe()

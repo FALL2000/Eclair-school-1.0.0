@@ -21,6 +21,12 @@ class User(UserBase, table=True):
         description="Mot de passe (hashé)",
         nullable=False,
     )
+    is_active: bool = Field(
+        default=True,
+        nullable=False,
+        sa_column_kwargs={"server_default": "1"},
+        description="Un utilisateur désactivé ne peut plus se connecter",
+    )
 
     user_roles: list["UserRole"] = Relationship(
         back_populates="user", sa_relationship_kwargs={"cascade": "all, delete"})

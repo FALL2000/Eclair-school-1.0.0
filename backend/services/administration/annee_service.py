@@ -50,7 +50,7 @@ class AnneeService:
     def update_annee_scolaire(self, annee_update: AnneeUpdateDTO, annee_id: int):
         """Modifie une annee definie en BD"""
         try:
-            db_annee = self.annee_repository.findOne(annee_id)
+            db_annee = self.annee_repository.findOne(annee_id, load_relations=True)
             if db_annee is None:
                 raise HTTPException(
                     status_code=404,

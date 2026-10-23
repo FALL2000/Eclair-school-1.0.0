@@ -3,7 +3,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.administration.annee_repository import AnneeRepository
 from repositories.administration.bareme_repository import BaremeRepository
 from repositories.administration.groupe_matiere_evalue_repository import GroupeMatiereEvalueRepository
@@ -35,7 +36,7 @@ def get_matiere_evalue_service(db: Session = Depends(get_db)):
 def add_matiere_evalue(
     matiere_evalue_in: MatiereEvalueCreateDTO,
     matiere_evalue_service: Annotated[MatiereEvalueService, Depends(get_matiere_evalue_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.MATIERE_EVALUE, Action.AJOUTER))],
     groupe_matiere_evalue_id: Annotated[int, Query(
         description="Groupe de matiere evalue auquel la matiere doit etre ajoute")] = ...,
     bareme_id: Annotated[int, Query(
@@ -54,7 +55,7 @@ def update_matiere_evalue(
     matiere_evalue_id: int,
     matiere_evalue_update: MatiereEvalueUpdateDTO,
     matiere_evalue_service: Annotated[MatiereEvalueService, Depends(get_matiere_evalue_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.MATIERE_EVALUE, Action.MODIFIER))],
 ):
     return matiere_evalue_service.update_matiere_evalue(matiere_evalue_update, matiere_evalue_id)
 
@@ -67,7 +68,7 @@ def update_matiere_evalue(
 def delete_matiere_evalue(
     matiere_evalue_id: int,
     matiere_evalue_service: Annotated[MatiereEvalueService, Depends(get_matiere_evalue_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.MATIERE_EVALUE, Action.SUPPRIMER))],
 ):
     return matiere_evalue_service.delete_matiere_evalue(matiere_evalue_id)
 
@@ -81,7 +82,7 @@ def delete_matiere_evalue(
 def get_one_matiere_evalue(
     matiere_evalue_id: int,
     matiere_evalue_service: Annotated[MatiereEvalueService, Depends(get_matiere_evalue_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.MATIERE_EVALUE, Action.CONSULTER))],
 ):
     return matiere_evalue_service.get_one_matiere_evalue(matiere_evalue_id)
 
@@ -94,6 +95,6 @@ def get_one_matiere_evalue(
 )
 def get_all_matiere_evalue(
     matiere_evalue_service: Annotated[MatiereEvalueService, Depends(get_matiere_evalue_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.MATIERE_EVALUE, Action.CONSULTER))],
 ):
     return matiere_evalue_service.get_all_matiere_evalue()

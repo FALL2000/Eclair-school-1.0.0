@@ -3,7 +3,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.administration.annee_repository import AnneeRepository
 from repositories.administration.configuration_repository import ConfigurationRepository
 from repositories.administration.discipline_decision_repository import DisciplineDecisionRepository
@@ -47,7 +48,7 @@ def get_discipline_service(db: Session = Depends(get_db)):
 def add_discipline(
     discipline_in: DisciplineEleveCreateDTO,
     discipline_service: Annotated[DisciplineEleveService, Depends(get_discipline_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.DISCIPLINE_ELEVE, Action.AJOUTER))],
     id_eleve: Annotated[int, Query(description="Id de l'élève")] = ...,
     id_classe: Annotated[int, Query(description="Id de la classe")] = ...,
     id_evaluation: Annotated[int, Query(description="Id de l'évaluation")] = ...,
@@ -64,7 +65,7 @@ def add_discipline(
 def add_bulk_disciplines(
     data: DisciplineEleveBulkCreateDTO,
     discipline_service: Annotated[DisciplineEleveService, Depends(get_discipline_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.DISCIPLINE_ELEVE, Action.AJOUTER))],
 ):
     return discipline_service.add_bulk_disciplines(data)
 
@@ -79,7 +80,7 @@ def update_discipline(
     discipline_id: int,
     discipline_update: DisciplineEleveUpdateDTO,
     discipline_service: Annotated[DisciplineEleveService, Depends(get_discipline_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.DISCIPLINE_ELEVE, Action.MODIFIER))],
 ):
     return discipline_service.update_discipline(discipline_id, discipline_update)
 
@@ -93,7 +94,7 @@ def update_discipline(
 def update_bulk_disciplines(
     data: DisciplineEleveBulkUpdateDTO,
     discipline_service: Annotated[DisciplineEleveService, Depends(get_discipline_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.DISCIPLINE_ELEVE, Action.MODIFIER))],
 ):
     return discipline_service.update_bulk_disciplines(data)
 
@@ -107,7 +108,7 @@ def update_bulk_disciplines(
 def calculer_discipline_eleve(
     id_eleve: int,
     discipline_service: Annotated[DisciplineEleveService, Depends(get_discipline_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.DISCIPLINE_ELEVE, Action.CALCULER))],
     id_classe: Annotated[int, Query(description="Id de la classe")] = ...,
     id_evaluation: Annotated[int, Query(description="Id de l'évaluation")] = ...,
 ):
@@ -123,7 +124,7 @@ def calculer_discipline_eleve(
 def calculer_disciplines_classe(
     id_classe: int,
     discipline_service: Annotated[DisciplineEleveService, Depends(get_discipline_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.DISCIPLINE_ELEVE, Action.CALCULER))],
     id_evaluation: Annotated[int, Query(description="Id de l'évaluation")] = ...,
 ):
     return discipline_service.calculer_disciplines_classe(id_classe, id_evaluation)

@@ -3,7 +3,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.administration.annee_repository import AnneeRepository
 from repositories.administration.serie_repository import SerieRepository
 from schemas.administration.serie_dto import SerieCreateDTO, SerieResponseDTO, SerieUpdateDTO
@@ -27,7 +28,7 @@ def get_serie_service(db: Session = Depends(get_db)):
 def add_serie(
     serie_in: SerieCreateDTO,
     serie_service: Annotated[SerieService, Depends(get_serie_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.SERIE, Action.AJOUTER))],
 ):
     return serie_service.add_serie(serie_in)
 
@@ -42,7 +43,7 @@ def update_serie(
     serie_id: int,
     serie_update: SerieUpdateDTO,
     serie_service: Annotated[SerieService, Depends(get_serie_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.SERIE, Action.MODIFIER))],
 ):
     return serie_service.update_serie(serie_update, serie_id)
 
@@ -55,7 +56,7 @@ def update_serie(
 def delete_serie(
     serie_id: int,
     serie_service: Annotated[SerieService, Depends(get_serie_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.SERIE, Action.SUPPRIMER))],
 ):
     return serie_service.delete_serie(serie_id)
 
@@ -69,7 +70,7 @@ def delete_serie(
 def get_one_serie(
     serie_id: int,
     serie_service: Annotated[SerieService, Depends(get_serie_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.SERIE, Action.CONSULTER))],
 ):
     return serie_service.get_one_serie(serie_id)
 
@@ -82,6 +83,6 @@ def get_one_serie(
 )
 def get_all_serie(
     serie_service: Annotated[SerieService, Depends(get_serie_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.SERIE, Action.CONSULTER))],
 ):
     return serie_service.get_all_serie()

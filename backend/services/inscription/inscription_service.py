@@ -109,7 +109,7 @@ class InscriptionService:
         """Met a jour une inscription existante (is_inscris False) : is_inscris True et date_inscris."""
         try:
             db_inscription = self.inscription_repository.findOne(
-                inscription_id)
+                inscription_id, load_relations=True)
             self._check_inscription_exists(db_inscription)
             if db_inscription.is_inscris:
                 raise HTTPException(
@@ -141,7 +141,7 @@ class InscriptionService:
         """
         try:
             annee_scolaire = self._get_annee_service().get_annee_scolaire()
-            classe = self.classe_repository.findOne(id_classe)
+            classe = self.classe_repository.findOne(id_classe, load_relations=True)
             if classe is None:
                 raise HTTPException(
                     status_code=404,

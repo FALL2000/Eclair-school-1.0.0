@@ -3,7 +3,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.enseignants.enseignant_repository import EnseignantRepository
 from repositories.enseignement.enseignement_repository import EnseignementRepository
 from schemas.enseignement.enseignement_dto import (
@@ -37,7 +38,7 @@ def get_enseignement_service(db: Session = Depends(get_db)):
 def add_enseignement(
     data: EnseignementAvecEnseignantCreateDTO,
     enseignement_service: Annotated[EnseignementService, Depends(get_enseignement_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.ENSEIGNEMENT, Action.AJOUTER))],
     id_type_salaire: Annotated[int, Query(description="Id du type de salaire de l'enseignant")] = ...,
     id_matiere: Annotated[int, Query(description="Id de la matière enseignée")] = ...,
 ):
@@ -53,7 +54,7 @@ def add_enseignement(
 def add_bulk_with_enseignant(
     data: EnseignantAvecEnseignementsBulkCreateDTO,
     enseignement_service: Annotated[EnseignementService, Depends(get_enseignement_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.ENSEIGNANT, Action.AJOUTER))],
     id_type_salaire: Annotated[int, Query(description="Id du type de salaire de l'enseignant")] = ...,
 ):
     return enseignement_service.add_bulk_with_enseignant(data, id_type_salaire)
@@ -68,7 +69,7 @@ def add_bulk_with_enseignant(
 def add_bulk_without_enseignant(
     data: EnseignementSansEnseignantBulkCreateDTO,
     enseignement_service: Annotated[EnseignementService, Depends(get_enseignement_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.ENSEIGNEMENT, Action.AJOUTER))],
     id_enseignant: Annotated[int, Query(description="Id de l'enseignant")] = ...,
 ):
     return enseignement_service.add_bulk_without_enseignant(data, id_enseignant)
@@ -84,7 +85,7 @@ def update_enseignement(
     enseignement_id: int,
     data: EnseignementUpdateDTO,
     enseignement_service: Annotated[EnseignementService, Depends(get_enseignement_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.ENSEIGNEMENT, Action.MODIFIER))],
 ):
     return enseignement_service.update_enseignement(enseignement_id, data)
 
@@ -98,7 +99,7 @@ def update_enseignement(
 def update_bulk_enseignements(
     data: EnseignementBulkUpdateDTO,
     enseignement_service: Annotated[EnseignementService, Depends(get_enseignement_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.ENSEIGNEMENT, Action.MODIFIER))],
 ):
     return enseignement_service.update_bulk_enseignements(data)
 
@@ -111,7 +112,7 @@ def update_bulk_enseignements(
 def delete_enseignement(
     enseignement_id: int,
     enseignement_service: Annotated[EnseignementService, Depends(get_enseignement_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.ENSEIGNEMENT, Action.SUPPRIMER))],
 ):
     return enseignement_service.delete_enseignement(enseignement_id)
 
@@ -124,6 +125,6 @@ def delete_enseignement(
 def delete_bulk_enseignements(
     data: EnseignementBulkDeleteDTO,
     enseignement_service: Annotated[EnseignementService, Depends(get_enseignement_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.ENSEIGNEMENT, Action.SUPPRIMER))],
 ):
     return enseignement_service.delete_bulk_enseignements(data)

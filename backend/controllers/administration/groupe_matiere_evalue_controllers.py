@@ -3,7 +3,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
-from common.dependencies import check_permission_user, get_db
+from common.dependencies import get_db, require_permission
+from common.permissions import Action, Module
 from repositories.administration.annee_repository import AnneeRepository
 from repositories.administration.groupe_matiere_evalue_repository import GroupeMatiereEvalueRepository
 from repositories.administration.niveau_repository import NiveauRepository
@@ -34,7 +35,7 @@ def get_groupe_matiere_evalue_service(db: Session = Depends(get_db)):
 def add_groupe_matiere_evalue(
     groupe_matiere_evalue_in: GroupeMatiereEvalueCreateDTO,
     groupe_matiere_evalue_service: Annotated[GroupeMatiereEvalueService, Depends(get_groupe_matiere_evalue_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.GROUPE_MATIERE_EVALUE, Action.AJOUTER))],
     niveau_id: Annotated[int, Query(
         description="Niveau auquel le groupe de matiere evalue doit etre ajoute")] = ...,
 ):
@@ -51,7 +52,7 @@ def update_groupe_matiere_evalue(
     groupe_matiere_evalue_id: int,
     groupe_matiere_evalue_update: GroupeMatiereEvalueUpdateDTO,
     groupe_matiere_evalue_service: Annotated[GroupeMatiereEvalueService, Depends(get_groupe_matiere_evalue_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.GROUPE_MATIERE_EVALUE, Action.MODIFIER))],
 ):
     return groupe_matiere_evalue_service.update_groupe_matiere_evalue(
         groupe_matiere_evalue_update, groupe_matiere_evalue_id
@@ -66,7 +67,7 @@ def update_groupe_matiere_evalue(
 def delete_groupe_matiere_evalue(
     groupe_matiere_evalue_id: int,
     groupe_matiere_evalue_service: Annotated[GroupeMatiereEvalueService, Depends(get_groupe_matiere_evalue_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.GROUPE_MATIERE_EVALUE, Action.SUPPRIMER))],
 ):
     return groupe_matiere_evalue_service.delete_groupe_matiere_evalue(groupe_matiere_evalue_id)
 
@@ -80,7 +81,7 @@ def delete_groupe_matiere_evalue(
 def get_one_groupe_matiere_evalue(
     groupe_matiere_evalue_id: int,
     groupe_matiere_evalue_service: Annotated[GroupeMatiereEvalueService, Depends(get_groupe_matiere_evalue_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.GROUPE_MATIERE_EVALUE, Action.CONSULTER))],
 ):
     return groupe_matiere_evalue_service.get_one_groupe_matiere_evalue(groupe_matiere_evalue_id)
 
@@ -93,7 +94,7 @@ def get_one_groupe_matiere_evalue(
 )
 def get_all_groupe_matiere_evalue(
     groupe_matiere_evalue_service: Annotated[GroupeMatiereEvalueService, Depends(get_groupe_matiere_evalue_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.GROUPE_MATIERE_EVALUE, Action.CONSULTER))],
 ):
     return groupe_matiere_evalue_service.get_all_groupe_matiere_evalue()
 
@@ -106,6 +107,6 @@ def get_all_groupe_matiere_evalue(
 )
 def get_all_groupe_matiere_evalue_with_matiere(
     groupe_matiere_evalue_service: Annotated[GroupeMatiereEvalueService, Depends(get_groupe_matiere_evalue_service)],
-    _: Annotated[dict[str, Any], Depends(check_permission_user)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.GROUPE_MATIERE_EVALUE, Action.CONSULTER))],
 ):
     return groupe_matiere_evalue_service.get_all_groupe_matiere_evalue(True)
