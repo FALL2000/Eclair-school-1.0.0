@@ -2,6 +2,7 @@ from fastapi import HTTPException
 
 from models.enseignants.enseignant import Enseignant
 from models.enseignement.enseignement import Enseignement
+from repositories.administration.annee_repository import AnneeRepository
 from repositories.enseignants.enseignant_repository import EnseignantRepository
 from repositories.enseignement.enseignement_repository import EnseignementRepository
 from schemas.enseignement.enseignement_dto import (
@@ -214,12 +215,32 @@ class EnseignementService:
             raise HTTPException(
                 status_code=500, detail=f"Une erreur lors de la modification en masse des enseignements: {str(e)}")
 
+    def _check_sans_cours_planifies(self, enseignements: list[Enseignement]):
+        """Une matiere ne peut pas etre retiree a un enseignant s'il a des cours planifies
+        pour cette matiere dans l'emploi du temps de l'annee en cours"""
+        ids_annees = [a.id for a in AnneeRepository(self._session()).findByIs_cloture(False)]
+        bloques = [
+            {"id": e.id, "id_matiere": e.id_matiere, "nb_cours": nb}
+            for e in enseignements
+            if (nb := self.enseignement_repository.count_cours_planifies(e.id_enseignant, e.id_matiere, ids_annees))
+        ]
+        if bloques:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error_code": "COURS_PLANIFIES",
+                    "message": "Impossible de retirer une matiere qui a des cours planifies dans l'emploi du temps de l'annee en cours : supprimez d'abord ces cours",
+                    "enseignements": bloques,
+                },
+            )
+
     def delete_enseignement(self, enseignement_id: int):
-        """Supprime un enseignement en BD"""
+        """Supprime un enseignement en BD (refuse si des cours sont planifies pour cette matiere)"""
         try:
             db_enseignement = self.enseignement_repository.findOne(
                 enseignement_id)
             self._check_enseignement_exists(db_enseignement)
+            self._check_sans_cours_planifies([db_enseignement])
             deleted = self.enseignement_repository.deleteOne(enseignement_id)
             if deleted:
                 self._session().commit()
@@ -233,8 +254,10 @@ class EnseignementService:
                 status_code=500, detail=f"Une erreur lors de la suppression de l'enseignement: {str(e)}")
 
     def delete_bulk_enseignements(self, data: EnseignementBulkDeleteDTO):
-        """Supprime plusieurs enseignements en masse en BD"""
+        """Supprime plusieurs enseignements en masse en BD (refuse si l'un d'eux a des cours planifies)"""
         try:
+            enseignements = [e for e in (self.enseignement_repository.findOne(i) for i in data.ids) if e is not None]
+            self._check_sans_cours_planifies(enseignements)
             count = self.enseignement_repository.deleteMany(data.ids)
             self._session().commit()
             return {"deleted": count, "message": f"{count} enseignement(s) supprimé(s)"}

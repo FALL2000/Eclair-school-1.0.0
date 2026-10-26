@@ -65,3 +65,32 @@ class EleveResponseDTO(EleveBase):
     id: int
     matricule: str
     is_active: bool
+
+
+class EleveRechercheResponseDTO(SQLModel):
+    """Résultat de la recherche d'un élève dans toute l'école"""
+    id: int
+    matricule: str
+    nom: str
+    prenom: Optional[str] = None
+    genre: str
+    dat_naissance: date
+    lieu_naissance: str
+    id_classe: Optional[int] = Field(default=None, description="Classe de l'année en cours (vide si non inscrit)")
+    classe: Optional[str] = Field(default=None, description="Libellé de la classe de l'année en cours")
+
+
+class EleveClasseResponseDTO(EleveResponseDTO):
+    """Élève inscrit dans une classe pour l'année en cours"""
+    id_inscription: int
+    is_redoublant: bool
+    is_nouveau: bool
+    date_inscris: Optional[date] = None
+
+
+class PaginatedEleveClasse(SQLModel):
+    page: int
+    page_size: int
+    total_items: int
+    total_pages: int
+    eleves: list[EleveClasseResponseDTO]

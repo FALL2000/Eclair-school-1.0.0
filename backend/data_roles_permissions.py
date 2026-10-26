@@ -10,7 +10,8 @@ Contenu :
   - les rôles de base SUPER ADMIN (toutes les permissions, sans vérification) et ADMIN
     (toutes les permissions du domaine administration) ;
   - le premier SUPER ADMIN, si SUPER_ADMIN_USERNAME et SUPER_ADMIN_PASSWORD sont renseignés dans le .env :
-    l'utilisateur est créé s'il n'existe pas, sinon le rôle lui est simplement attribué.
+    l'utilisateur est créé s'il n'existe pas, sinon le rôle lui est simplement attribué ;
+  - les types de salaire des enseignants (Mensuel, Horaire), seulement ceux qui n'existent pas encore.
 """
 from alembic import op
 import sqlalchemy as sa
@@ -25,6 +26,12 @@ ROLES = [
     {"id": ID_ROLE_ADMIN, "role_name": "ADMIN", "is_systeme": True},
 ]
 DOMAINE_ADMIN = "administration"
+
+# Libellés identiques à l'énumération TypeSalaire (common/enumeration.py)
+TYPES_SALAIRE = [
+    {"code": "MENSUEL", "libelle": "Mensuel"},
+    {"code": "HORAIRE", "libelle": "Horaire"},
+]
 
 CRUD = ["ajouter", "modifier", "supprimer", "consulter"]
 VERBES = {
@@ -66,6 +73,8 @@ CATALOGUE_PERMISSIONS = {
         ("cours", "un cours", CRUD),
         ("presence_eleve", "la présence des élèves", ["ajouter", "modifier", "consulter"]),
         ("presence_enseignant", "la présence des enseignants", ["ajouter", "modifier", "consulter"]),
+        # salaire:modifier = configurer le moyen de paiement (compte) des enseignants
+        ("salaire", "le salaire des enseignants", ["ajouter", "modifier", "annuler", "consulter"]),
     ],
     "evaluations": [
         ("evaluation", "une évaluation", CRUD),
@@ -134,8 +143,23 @@ def upgrade_data() -> None:
             id_user = connexion.execute(selection).scalar()
         connexion.execute(user_role_table.insert().values(id_user=id_user, id_role=ID_ROLE_SUPER_ADMIN))
 
+    # Types de salaire : seuls ceux qui n'existent pas encore sont ajoutés
+    type_salaire_table = sa.table(
+        "type_salaire", sa.column("code", sa.String), sa.column("libelle", sa.String),
+    )
+    codes_existants = set(op.get_bind().execute(sa.select(type_salaire_table.c.code)).scalars())
+    nouveaux_types = [t for t in TYPES_SALAIRE if t["code"] not in codes_existants]
+    if nouveaux_types:
+        op.bulk_insert(type_salaire_table, nouveaux_types)
+
 
 def downgrade_data() -> None:
+    # Les types de salaire déjà utilisés par des enseignants sont conservés
+    codes = ", ".join(f"'{t['code']}'" for t in TYPES_SALAIRE)
+    op.execute(
+        f"DELETE FROM type_salaire WHERE code IN ({codes}) "
+        "AND id NOT IN (SELECT id_type_salaire FROM enseignant)"
+    )
     op.execute("DELETE FROM role_permission")
     op.execute(f"DELETE FROM user_role WHERE id_role IN ({ID_ROLE_SUPER_ADMIN}, {ID_ROLE_ADMIN})")
     op.execute(f"DELETE FROM role WHERE id IN ({ID_ROLE_SUPER_ADMIN}, {ID_ROLE_ADMIN})")

@@ -58,7 +58,7 @@ def get_cours_by_classe(
 
 @router.post(
     "/add",
-    summary="Ajouter un cours",
+    summary="Ajouter un cours (enseignant actif qui enseigne la matiere, sans conflit de creneau)",
     status_code=201,
     response_model=CoursResponseDTO,
 )

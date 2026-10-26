@@ -17,6 +17,17 @@ class StatutPaiementTranche(str, Enum):
     AUCUN = "aucun"
 
 
+class MoyenPaiement(str, Enum):
+    """Moyen de paiement du salaire d'un enseignant"""
+    ESPECE = "ESPECE"
+    COMPTE_BANCAIRE = "COMPTE BANCAIRE"
+    MOBILE = "MOBILE"
+
+
+# Moyens de paiement pour lesquels le numero de compte est obligatoire
+MOYENS_PAIEMENT_AVEC_COMPTE = (MoyenPaiement.COMPTE_BANCAIRE, MoyenPaiement.MOBILE)
+
+
 class TypeNotation(str, Enum):
     PRIMAIRE = "Primaire"
     SECONDAIRE = "Secondaire"

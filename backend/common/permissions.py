@@ -49,6 +49,7 @@ class Module(str, Enum):
     COURS = "cours"
     PRESENCE_ELEVE = "presence_eleve"
     PRESENCE_ENSEIGNANT = "presence_enseignant"
+    SALAIRE = "salaire"
     # Domaine evaluations
     EVALUATION = "evaluation"
     NOTATION = "notation"

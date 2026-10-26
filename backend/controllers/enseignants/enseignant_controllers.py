@@ -41,6 +41,23 @@ def get_all_enseignants(
 
 
 @router.get(
+    "/recherche",
+    summary="Rechercher des enseignants par nom, prenom et matiere enseignee (pagine)",
+    status_code=200,
+    response_model=PaginatedEnseignant,
+)
+def search_enseignants(
+    enseignant_service: Annotated[EnseignantService, Depends(get_enseignant_service)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.ENSEIGNANT, Action.RECHERCHER))],
+    q: Annotated[str | None, Query(max_length=100, description="Nom ou prenom de l'enseignant")] = None,
+    id_matiere: Annotated[int | None, Query(description="Id de la matiere enseignee")] = None,
+    page: Annotated[int | None, Query(ge=1, description="Page actuelle")] = None,
+    page_size: Annotated[int | None, Query(ge=1, le=200, description="Nombre d'elements par page")] = None,
+):
+    return enseignant_service.search_enseignants(q, id_matiere, page, page_size)
+
+
+@router.get(
     "/one/{enseignant_id}",
     summary="Récupérer un enseignant avec ses enseignements",
     status_code=200,

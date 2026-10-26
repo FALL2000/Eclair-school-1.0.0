@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from controllers.administration.configuration_controllers import router as configuration_router
 from controllers.enseignants.enseignant_controllers import router as enseignant_router
+from controllers.enseignants.salaire_controllers import router as salaire_router
 from controllers.enseignement.enseignement_controllers import router as enseignement_router
 from controllers.enseignement.cours_controllers import router as cours_router
 from controllers.enseignement.presence_eleve_controllers import router as presence_eleve_router
@@ -69,6 +70,7 @@ def include_api_routes() -> APIRouter:
     router.include_router(configuration_router, prefix="/configuration", tags=["configuration"])
     router.include_router(
         enseignant_router, prefix="/enseignant", tags=["enseignants"])
+    router.include_router(salaire_router, prefix="/salaire", tags=["salaires enseignants"])
     router.include_router(enseignement_router,
                           prefix="/enseignement", tags=["enseignements"])
     router.include_router(cours_router, prefix="/cours", tags=["cours"])

@@ -30,5 +30,6 @@ class User(UserBase, table=True):
 
     user_roles: list["UserRole"] = Relationship(
         back_populates="user", sa_relationship_kwargs={"cascade": "all, delete"})
-    inscriptions: list["Inscription"] = Relationship(back_populates="user")
+    inscriptions: list["Inscription"] = Relationship(
+        back_populates="user", sa_relationship_kwargs={"foreign_keys": "Inscription.id_user"})
     reglements: list["Reglement"] = Relationship(back_populates="user")

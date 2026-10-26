@@ -137,3 +137,30 @@ class EnseignantService:
             self._session().rollback()
             raise HTTPException(
                 status_code=500, detail=f"Une erreur lors de la suppression de l'enseignant: {str(e)}")
+
+    def search_enseignants(
+        self, q: str | None, id_matiere: int | None, page: int | None, page_size: int | None,
+    ) -> PaginatedEnseignant:
+        """Recherche paginee des enseignants par nom ou prenom et par matiere enseignee, triee par nom"""
+        try:
+            termes = [terme for terme in (q or "").split() if terme]
+            total_items = self.enseignant_repository.count_search(termes, id_matiere)
+            if page_size is None or page is None:
+                page_size = total_items if total_items > 0 else 1
+                page = 1
+            total_pages = max(1, (total_items + page_size - 1) // page_size)
+            page = min(max(page, 1), total_pages)
+            items = self.enseignant_repository.search(
+                termes, id_matiere, offset=(page - 1) * page_size, limit=page_size)
+            return PaginatedEnseignant(
+                page=page,
+                page_size=page_size,
+                total_items=total_items,
+                total_pages=total_pages,
+                enseignants=items,
+            )
+        except HTTPException as http_exec:
+            raise http_exec
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"Une erreur lors de la recherche des enseignants: {str(e)}")

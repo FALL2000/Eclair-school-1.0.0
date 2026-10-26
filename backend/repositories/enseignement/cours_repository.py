@@ -1,8 +1,10 @@
 from datetime import time
 
-from sqlmodel import Session, select
+from sqlmodel import Session, func, select
 
+from models.enseignants.enseignant import Enseignant
 from models.enseignement.cours import Cours
+from models.enseignement.enseignement import Enseignement
 from repositories.base_repository import BaseRepository
 
 
@@ -10,6 +12,15 @@ class CoursRepository(BaseRepository[Cours]):
 
     def __init__(self, session: Session):
         super().__init__(Cours, session)
+
+    def get_enseignant(self, id_enseignant: int) -> Enseignant | None:
+        return self.session.get(Enseignant, id_enseignant)
+
+    def enseigne_matiere(self, id_enseignant: int, id_matiere: int) -> bool:
+        """La matiere est-elle attribuee a l'enseignant (table enseignement) ?"""
+        statement = select(func.count()).select_from(Enseignement).where(
+            Enseignement.id_enseignant == id_enseignant, Enseignement.id_matiere == id_matiere)
+        return self.session.exec(statement).one() > 0
 
     def find_chevauchement(
         self,

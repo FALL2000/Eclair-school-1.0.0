@@ -87,6 +87,25 @@ class CoursService:
                 },
             )
 
+    def _check_enseignant_matiere(self, id_enseignant: int, id_matiere: int):
+        """L'enseignant doit exister, etre actif et enseigner la matiere du cours"""
+        enseignant = self.cours_repository.get_enseignant(id_enseignant)
+        if enseignant is None:
+            raise HTTPException(
+                status_code=404,
+                detail={"error_code": "ENSEIGNANT_NOT_FOUND", "message": "Enseignant non trouvé"},
+            )
+        if not enseignant.is_active:
+            raise HTTPException(
+                status_code=409,
+                detail={"error_code": "ENSEIGNANT_INACTIF", "message": "Impossible de planifier un cours pour un enseignant inactif"},
+            )
+        if not self.cours_repository.enseigne_matiere(id_enseignant, id_matiere):
+            raise HTTPException(
+                status_code=400,
+                detail={"error_code": "MATIERE_NON_ENSEIGNEE", "message": "Cette matière n'est pas attribuée à l'enseignant"},
+            )
+
     def _check_modification_cours(self, db_cours: Cours, update_data: dict):
         """Vérifie les heures et les conflits de période d'un cours après application des modifications"""
         jour = update_data.get("jour", db_cours.jour)
@@ -110,6 +129,7 @@ class CoursService:
         try:
             annee = self._get_annee_service().get_annee_scolaire()[0]
             self._check_heures(data.heure_deb, data.heure_fin)
+            self._check_enseignant_matiere(id_enseignant, id_matiere)
             self._check_periode_classe(data.jour, data.heure_deb, data.heure_fin, id_classe, annee.id)
             self._check_enseignant_periode(data.jour, data.heure_deb, data.heure_fin, id_enseignant, annee.id)
             cours_dict = data.model_dump()
@@ -136,6 +156,7 @@ class CoursService:
             new_cours_list = []
             for item in data.cours:
                 self._check_heures(item.heure_deb, item.heure_fin)
+                self._check_enseignant_matiere(item.id_enseignant, item.id_matiere)
                 self._check_periode_classe(item.jour, item.heure_deb, item.heure_fin, item.id_classe, annee.id)
                 self._check_enseignant_periode(item.jour, item.heure_deb, item.heure_fin, item.id_enseignant, annee.id)
                 cours_dict = item.model_dump()

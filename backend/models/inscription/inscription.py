@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Optional, TYPE_CHECKING
 from sqlalchemy import Column, ForeignKey, Integer
 from sqlmodel import Field, Relationship, UniqueConstraint
@@ -51,9 +51,27 @@ class Inscription(InscriptionBase, table=True):
         ),
         description="Utilisateur associe a l'inscription",
     )
+    date_modification: Optional[datetime] = Field(
+        default=None,
+        nullable=True,
+        description="Date de la derniere modification de l'inscription",
+    )
+    id_user_modification: Optional[int] = Field(
+        default=None,
+        sa_column=Column(
+            Integer,
+            ForeignKey("user.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        description="Utilisateur ayant fait la derniere modification de l'inscription",
+    )
 
     eleve: "Eleve" = Relationship(
         back_populates="inscriptions", sa_relationship_kwargs={"lazy": "joined"})
     classe: "Classe" = Relationship(back_populates="inscriptions")
     annee: "Annee" = Relationship(back_populates="inscriptions")
-    user: Optional["User"] = Relationship(back_populates="inscriptions")
+    # Deux cles etrangeres vers user : chaque relation precise la colonne utilisee
+    user: Optional["User"] = Relationship(
+        back_populates="inscriptions", sa_relationship_kwargs={"foreign_keys": "Inscription.id_user"})
+    user_modification: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "Inscription.id_user_modification"})

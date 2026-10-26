@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 from pydantic import ConfigDict
@@ -52,3 +52,41 @@ class PaginatedInscription(SQLModel):
     total_items: int
     total_pages: int
     inscriptions: list[InscriptionResponseDTO]
+
+
+class InscriptionModificationDTO(SQLModel):
+    """Modification d'une inscription : classe (le niveau suit la classe) et statut redoublant"""
+    id_classe: Optional[int] = None
+    is_redoublant: Optional[bool] = None
+
+
+class InscriptionHistoriqueDTO(SQLModel):
+    """Ligne de l'historique des inscriptions"""
+    id: int
+    date_inscris: Optional[date] = None
+    is_redoublant: bool
+    is_nouveau: bool
+    id_eleve: int
+    matricule: str
+    nom: str
+    prenom: Optional[str] = None
+    genre: str
+    dat_naissance: date
+    lieu_naissance: str
+    id_classe: int
+    classe: str
+    id_niveau: int
+    niveau: str
+    id_user: Optional[int] = None
+    user: Optional[str] = Field(default=None, description="Utilisateur ayant fait l'inscription")
+    date_modification: Optional[datetime] = None
+    id_user_modification: Optional[int] = None
+    user_modification: Optional[str] = Field(default=None, description="Utilisateur ayant fait la derniere modification")
+
+
+class PaginatedHistoriqueInscription(SQLModel):
+    page: int
+    page_size: int
+    total_items: int
+    total_pages: int
+    inscriptions: list[InscriptionHistoriqueDTO]
