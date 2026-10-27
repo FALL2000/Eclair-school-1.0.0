@@ -11,7 +11,14 @@
   const entre = (min, max) => min + alea() * (max - min);
   const quart = v => Math.round(v * 4) / 4;
 
-  const ecole = { nom: "Collège Eclair", ville: "Yaoundé", annee: "2026-2027", typeSchool: "secondaire" };
+  // Établissement (simulé) : en développement, ces informations viendront de la table de configuration de l'école
+  const ecole = {
+    nom: "Complexe Scolaire Bilingue La Réussite", sigle: "CSB La Réussite", ville: "Yaoundé",
+    adresse: "B.P. 1234 Yaoundé · Mvog-Mbi", telephone: "+237 6 99 00 11 22", email: "contact@lareussite.cm",
+    devise: "Travail · Discipline · Réussite",
+    logo: '<svg viewBox="0 0 64 72" aria-hidden="true"><path d="M32 2 60 10v24c0 18-12 30-28 36C16 64 4 52 4 34V10z" fill="#7f1d1d"/><path d="M32 7 55 13.5V34c0 15-10 25-23 30.5C19 59 9 49 9 34V13.5z" fill="none" stroke="#e0b341" stroke-width="2"/><path d="m32 14 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" fill="#e0b341"/><path d="M15 36c5.5-2.4 11-2.4 16 .6V55c-5-3-10.5-3-16-.6z" fill="#fff"/><path d="M49 36c-5.5-2.4-11-2.4-16 .6V55c5-3 10.5-3 16-.6z" fill="#f5e6c4"/></svg>',
+    annee: "2026-2027", typeSchool: "secondaire",
+  };
 
   const sections = [
     { id: 1, code: "FRANCO", libelle: "FRANCOPHONE" },
@@ -53,17 +60,17 @@
     { id: 2, code: "B10", libelle: "Sur 10", valeurMax: 10 },
   ];
   const appreciations = [
-    { id: 1, bareme: 1, min: 0, max: 4.99, libelle: "Très faible" },
-    { id: 2, bareme: 1, min: 5, max: 7.99, libelle: "Faible" },
-    { id: 3, bareme: 1, min: 8, max: 9.99, libelle: "Insuffisant" },
-    { id: 4, bareme: 1, min: 10, max: 11.99, libelle: "Passable" },
-    { id: 5, bareme: 1, min: 12, max: 13.99, libelle: "Assez bien" },
-    { id: 6, bareme: 1, min: 14, max: 15.99, libelle: "Bien" },
-    { id: 7, bareme: 1, min: 16, max: 17.99, libelle: "Très bien" },
-    { id: 8, bareme: 1, min: 18, max: 20, libelle: "Excellent" },
-    { id: 9, bareme: 2, min: 0, max: 4.99, libelle: "Non acquis" },
-    { id: 10, bareme: 2, min: 5, max: 7.49, libelle: "En cours d'acquisition" },
-    { id: 11, bareme: 2, min: 7.5, max: 10, libelle: "Acquis" },
+    { id: 1, bareme: 1, min: 0, max: 4.99, libelle: "Très faible", libelleEn: "Very poor" },
+    { id: 2, bareme: 1, min: 5, max: 7.99, libelle: "Faible", libelleEn: "Poor" },
+    { id: 3, bareme: 1, min: 8, max: 9.99, libelle: "Insuffisant", libelleEn: "Insufficient" },
+    { id: 4, bareme: 1, min: 10, max: 11.99, libelle: "Passable", libelleEn: "Fair" },
+    { id: 5, bareme: 1, min: 12, max: 13.99, libelle: "Assez bien", libelleEn: "Fairly good" },
+    { id: 6, bareme: 1, min: 14, max: 15.99, libelle: "Bien", libelleEn: "Good" },
+    { id: 7, bareme: 1, min: 16, max: 17.99, libelle: "Très bien", libelleEn: "Very good" },
+    { id: 8, bareme: 1, min: 18, max: 20, libelle: "Excellent", libelleEn: "Excellent" },
+    { id: 9, bareme: 2, min: 0, max: 4.99, libelle: "Non acquis", libelleEn: "Not acquired" },
+    { id: 10, bareme: 2, min: 5, max: 7.49, libelle: "En cours d'acquisition", libelleEn: "Being acquired" },
+    { id: 11, bareme: 2, min: 7.5, max: 10, libelle: "Acquis", libelleEn: "Acquired" },
   ];
 
   // Programme du niveau Seconde (classe de démonstration : 2nde C)
@@ -106,11 +113,11 @@
   ];
 
   const decisions = [
-    { id: 1, libelle: "Aucune sanction", min: 0, max: 5 },
-    { id: 2, libelle: "Avertissement", min: 6, max: 10 },
-    { id: 3, libelle: "Blâme", min: 11, max: 20 },
-    { id: 4, libelle: "Exclusion temporaire", min: 21, max: 40 },
-    { id: 5, libelle: "Conseil de discipline", min: 41, max: 999 },
+    { id: 1, libelle: "Aucune sanction", libelleEn: "No sanction", min: 0, max: 5 },
+    { id: 2, libelle: "Avertissement", libelleEn: "Warning", min: 6, max: 10 },
+    { id: 3, libelle: "Blâme", libelleEn: "Reprimand", min: 11, max: 20 },
+    { id: 4, libelle: "Exclusion temporaire", libelleEn: "Temporary exclusion", min: 21, max: 40 },
+    { id: 5, libelle: "Conseil de discipline", libelleEn: "Disciplinary board", min: 41, max: 999 },
   ];
 
   const nomsEleves = [

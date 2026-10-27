@@ -23,7 +23,8 @@
     theme: store.get("theme", null), // null : suit le système
     role: store.get("role", 1),
     connecte: store.get("connecte", false),
-    menuOuvert: false,
+    menuOuvert: false, // petit écran : menu affiché par-dessus le contenu
+    menuReplie: store.get("menuReplie", false), // grand écran : barre latérale masquée (mémorisé)
     popup: false,
     tab: { admin: "structure", eleve: "infos", scolarite: "reglements", users: "users", insc: "nouvelle", sal: "etat" },
     calcule: { 2: true }, // la Séquence 2 (évaluation parente) a déjà été calculée
@@ -31,7 +32,7 @@
       eleves: { q: "", qApplique: "", genre: "", page: 1, pageSize: 10 },
       notes: { evaluation: 1, matiere: 5 },
       discipline: { evaluation: 1 },
-      bulletin: { type: "trimestre", periode: 1, seuil: 10, regles: [
+      bulletin: { langue: "FR", type: "trimestre", periode: 1, seuil: 10, regles: [
         { min: 0, max: 8.99, decision: "Redouble" },
         { min: 9, max: 9.99, decision: "Promu en cas de rattrapage" },
         { min: 10, max: 20, decision: "Promu" },
@@ -134,7 +135,7 @@
   function appreciation(v, idBareme = 1) {
     if (v == null) return null;
     const a = D.appreciations.find(x => x.bareme === idBareme && v >= x.min && v <= x.max);
-    return a ? a.libelle : null;
+    return a ? (S.lang === "en" && a.libelleEn ? a.libelleEn : a.libelle) : null;
   }
   // Arrondi des notes calculées : .00-.19 -> entier, .20-.30 -> .25, .31-.59 -> .5, .60-.79 -> .75, .80-.99 -> entier suivant
   function arrondiQuart(v) {
@@ -220,7 +221,7 @@
       reussite, taux: r2(reussite * 100 / n),
     };
   }
-  const decisionDiscipline = total => (D.decisions.find(d => total >= d.min && total <= d.max) || {}).libelle || null;
+  const decisionDiscipline = total => { const d = D.decisions.find(x => total >= x.min && total <= x.max); return d ? (S.lang === "en" && d.libelleEn ? d.libelleEn : d.libelle) : null; };
   function discipline(idEl, evals) {
     let nj = 0, j = 0, trouve = false;
     for (const ev of evals) {
@@ -319,6 +320,15 @@
   /* ---------------- Logo ---------------- */
   const LOGO = `<svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#2563EB"/><path d="M10 21.5c7.2-3.4 14-3.4 20.5 0V47c-6.5-3.4-13.3-3.4-20.5 0z" fill="#fff"/><path d="M33.5 21.5c6.5-3.4 13.3-3.4 20.5 0V47c-7.2-3.4-14-3.4-20.5 0z" fill="#DBEAFE"/><path d="M36.5 7 22 34.5h9.2L26.5 57 43 26.8h-9.4L39.8 7z" fill="#FBBF24" stroke="#2563EB" stroke-width="2.4" stroke-linejoin="round"/></svg>`;
   const marque = () => `<div class="brand">${LOGO}<div class="brand-name"><b>Eclair</b> <span>School</span></div></div>`;
+  // Établissement (table de configuration de l'école) : logo et nom
+  const blocEcole = () => `<div class="ecole-card"><span class="logo-ecole">${D.ecole.logo}</span><div class="ecole-infos"><div class="ecole-nom" title="${esc(D.ecole.nom)}">${esc(D.ecole.nom)}</div><div class="small muted">${esc(D.ecole.ville)} · ${esc(D.ecole.annee)}</div></div></div>`;
+  // En-tête des documents imprimés : logo, nom et coordonnées de l'école à gauche ; droite = titre du document
+  const enteteDocument = (droite, bilingue = false) => `<div class="ph"><div class="doc-ecole"><span class="logo-ecole">${D.ecole.logo}</span><div>
+      <div class="doc-ecole-nom">${esc(D.ecole.nom)}</div>
+      <div class="doc-ecole-coord">${esc(D.ecole.adresse)} · ${esc(D.ecole.telephone)}</div>
+      <div class="doc-ecole-coord">${bilingue ? biLigne("c.anneeScolaire") : t("c.anneeScolaire")} ${esc(D.ecole.annee)} · <i>${esc(D.ecole.devise)}</i></div></div></div>${droite}</div>`;
+  // Pied des documents : logo et nom de l'application
+  const piedApplication = (bilingue = false, droite = "") => `<div class="doc-pied"><span class="doc-app">${LOGO}<span>${bilingue ? biLigne("doc.generePar") : t("doc.generePar")} <b>Eclair School</b></span></span>${droite}</div>`;
 
   /* ---------------- Menu ---------------- */
   const MENU = [
@@ -475,15 +485,18 @@
         <div class="menu-item ${i.r === route ? "active" : ""}" data-go="${i.r}"><i class="pi ${i.i}"></i>${t(i.l)}</div>`).join("")}</div>`;
     }).join("");
     return `
-      <div class="layout">
+      <div class="layout ${S.menuReplie ? "replie" : ""}">
+        ${S.menuOuvert ? `<div class="menu-backdrop" data-act="fermer-menu"></div>` : ""}
         <aside class="sidebar ${S.menuOuvert ? "open" : ""}">
-          <div class="sidebar-head">${marque()}</div>
+          <div class="sidebar-head">${marque()}<button class="btn text icon menu-close" data-act="fermer-menu" aria-label="${t("nav.masquerMenu")}" title="${t("nav.masquerMenu")}"><i class="pi pi-times"></i></button></div>
+          ${blocEcole()}
           <nav class="menu">${menu}</nav>
-          <div class="sidebar-foot">${esc(D.ecole.nom)} · ${t("c.anneeScolaire")} ${esc(D.ecole.annee)}</div>
+          <div class="sidebar-foot">${t("c.anneeScolaire")} ${esc(D.ecole.annee)}</div>
         </aside>
         <div class="main">
           <header class="topbar">
-            <button class="btn text icon menu-toggle" data-act="menu" aria-label="Menu"><i class="pi pi-bars"></i></button>
+            <button class="btn text icon menu-toggle" data-act="menu" aria-label="Menu" title="${t(S.menuReplie ? "nav.afficherMenu" : "nav.masquerMenu")}"><i class="pi pi-bars"></i></button>
+            ${S.menuReplie ? `<div class="topbar-marque hide-sm">${marque()}</div>` : ""}
             <div class="breadcrumb hide-sm"><i class="pi pi-home"></i><i class="pi pi-chevron-right"></i><span>${t(item ? item.l : "nav.profil")}</span></div>
             <div class="grow"></div>
             <span class="tag info rounded hide-sm"><i class="pi pi-calendar"></i>${esc(D.ecole.annee)}</span>
@@ -586,6 +599,7 @@
           <div class="login-tools">${outilsPreferences()}</div>
           <form data-form="login">
             <div class="hide-desktop">${marque()}</div>
+            ${blocEcole()}
             <div><h1>${t("login.titre")}</h1><p class="muted" style="margin:6px 0 0">${t("login.sousTitre")}</p></div>
             <div class="field"><label for="lg-user">${t("login.utilisateur")}</label>
               <div class="input-icon"><i class="pi pi-user"></i><input id="lg-user" class="input" value="admin" autocomplete="username"></div></div>
@@ -1412,6 +1426,7 @@
       <div class="filters">
         ${filtreClasse(true)}
         <div class="field" style="width:auto"><label>${t("bul.type")}</label><div class="segmented">${[["evaluation", "bul.tEvaluation"], ["trimestre", "bul.tTrimestre"], ["annuel", "bul.tAnnuel"]].map(([k, l]) => `<button class="${f.type === k ? "on" : ""}" data-act="bul-type" data-v="${k}">${t(l)}</button>`).join("")}</div></div>
+        <div class="field" style="width:auto"><label>${t("bul.langue")}</label><div class="segmented">${["FR", "EN"].map(k => `<button class="${f.langue === k ? "on" : ""}" data-act="bul-langue" data-v="${k}">${k}</button>`).join("")}</div></div>
         ${periodes.length ? `<div class="field"><label>${t(f.type === "evaluation" ? "c.evaluation" : "c.trimestre")}</label><select class="select" data-f="bulletin.periode">${periodes.map(p => option(p.id, p.libelle, f.periode)).join("")}</select></div>` : ""}
         ${boutonAfficher("bulletins")}
         <div class="row" style="margin-left:auto">
@@ -1458,14 +1473,16 @@
   }
   function apercuBulletin(idEleve) {
     const f = S.f.bulletin;
+    // Le bulletin est construit dans sa langue (paramètre langue envoyé au backend) ; la fenêtre reste dans la langue de l'interface
+    const langueInterface = S.lang;
+    S.lang = (f.langue || "FR").toLowerCase();
     const periode = location.hash.startsWith("#/bulletins") ? { type: f.type, id: f.periode } : { type: "trimestre", id: 1 };
     const res = calculerBulletins(eleve(idEleve).classe, periode);
     const b = res.bulletins.find(x => x.e.id === Number(idEleve));
     const libellePeriode = periode.type === "evaluation" ? evaluation(periode.id).libelle : periode.type === "trimestre" ? byId(D.trimestres, periode.id).libelle : t("bul.annee", { a: D.ecole.annee });
     const e = b.e;
     const papier = `<div class="paper">
-      <div class="ph"><div class="brand">${LOGO}<div><div style="font-weight:800;font-size:15px">${esc(D.ecole.nom)}</div><div style="color:#64748b">${esc(D.ecole.ville)} · ${t("c.anneeScolaire")} ${esc(D.ecole.annee)}</div></div></div>
-        <div style="text-align:right"><h2>${t("bul.bulletinDeNotes")}</h2><div style="font-weight:700">${esc(libellePeriode)}</div></div></div>
+      ${enteteDocument(`<div style="text-align:right"><h2>${t("bul.bulletinDeNotes")}</h2><div style="font-weight:700">${esc(libellePeriode)}</div></div>`)}
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px">
         <div><span style="color:#64748b">${t("c.eleve")} :</span> <b>${esc(e.nom)} ${esc(e.prenom)}</b></div>
         <div><span style="color:#64748b">${t("c.matricule")} :</span> <b>${esc(e.matricule)}</b></div>
@@ -1484,7 +1501,9 @@
         <div class="box"><h4>${t("bul.discipline")}</h4><div>${t("disc.nonJustifiees")} : <b>${b.discipline.nj} h</b></div><div>${t("disc.justifiees")} : <b>${b.discipline.j} h</b></div><div>${t("disc.total")} : <b>${b.discipline.total} h</b></div><div>${t("disc.decision")} : <b>${esc(b.discipline.decision || "—")}</b></div></div>
       </div>
       <div style="display:flex;justify-content:space-between;margin-top:22px;color:#64748b"><span>${t("bul.signParent")}</span><span>${t("bul.signTitulaire")}</span><span>${t("bul.signDirecteur")}</span></div>
+      ${piedApplication()}
     </div>`;
+    S.lang = langueInterface;
     dialog(t("bul.apercuDe", { e: `${e.nom} ${e.prenom}` }), papier, `<button class="btn secondary" data-act="fermer">${t("c.fermer")}</button><button class="btn" data-act="pdf-bulletins"><i class="pi pi-file-pdf"></i>${t("bul.genererPdfEleve")}</button>`, true);
   }
 
@@ -1500,8 +1519,7 @@
     const mention = { e: `${esc(d.nom)} ${esc(d.prenom || "")}`, c: esc(d.classe), a: esc(D.ecole.annee) };
     const exemplaire = cleExemplaire => `
       <div class="recu">
-        <div class="ph"><div class="brand">${LOGO}<div><div style="font-weight:800;font-size:15px">${esc(D.ecole.nom)}</div><div style="color:#64748b">${esc(D.ecole.ville)} · ${biLigne("c.anneeScolaire")} ${esc(D.ecole.annee)}</div></div></div>
-          <div style="text-align:right"><h2>${bi("recu.titre")}</h2><div style="font-weight:700" class="mono">N° ${numero}</div><div style="color:#64748b">${dateRecu(d.date || AUJOURDHUI)}</div>${d.duplicata ? `<div class="duplicata">${tL("fr", "recu.duplicata")} · ${tL("en", "recu.duplicata")} · ${dateRecu(AUJOURDHUI)}</div>` : ""}</div></div>
+        ${enteteDocument(`<div style="text-align:right;flex:none"><h2>${bi("recu.titre")}</h2><div style="font-weight:700" class="mono">N° ${numero}</div><div style="color:#64748b">${dateRecu(d.date || AUJOURDHUI)}</div>${d.duplicata ? `<div class="duplicata">${tL("fr", "recu.duplicata")} · ${tL("en", "recu.duplicata")} · ${dateRecu(AUJOURDHUI)}</div>` : ""}</div>`, true)}
         <table>
           ${ligne("c.eleve", `<b>${esc(d.nom)} ${esc(d.prenom || "")}</b>`)}
           ${ligne("c.matricule", `<span class="mono">${esc(d.matricule)}</span>`)}
@@ -1514,7 +1532,7 @@
         </table>
         <p style="margin:10px 0 0">${bi("recu.mention", mention)}</p>
         <div style="display:flex;justify-content:space-between;margin-top:22px;color:#64748b"><span>${bi("recu.signature")}</span><span style="text-align:right">${bi("recu.cachet")}</span></div>
-        <div style="text-align:right;margin-top:6px;font-size:11px;color:#94a3b8">${biLigne(cleExemplaire)}</div>
+        ${piedApplication(true, `<span>${biLigne(cleExemplaire)}</span>`)}
       </div>`;
     dialog(t("recu.dialogTitre"), `<div class="paper print-area">${exemplaire("recu.exemplaireEleve")}<div class="decoupe"><span>✂</span></div>${exemplaire("recu.exemplaireEcole")}</div>`,
       `<button class="btn secondary" data-act="fermer">${t("c.fermer")}</button><button class="btn" data-act="imprimer"><i class="pi pi-print"></i>${t("recu.imprimer")}</button>`, true);
@@ -1635,13 +1653,13 @@
         <div class="card"><div class="card-head"><h2>${t("adm.appreciationsDe", { b: b.libelle })}</h2>${can("appreciation:ajouter") ? `<button class="btn sm"><i class="pi pi-plus"></i>${t("c.ajouter")}</button>` : ""}</div>
           <div class="card-body"><div style="display:flex;height:30px;border-radius:6px;overflow:hidden;border:1px solid var(--border)">${apps.map((a, i) => `<div title="${esc(a.libelle)}" style="width:${(a.max - a.min + 0.01) / b.valeurMax * 100}%;background:var(--p-primary-${[100, 200, 300, 400, 500, 600, 700, 800][Math.min(7, Math.round(i * 7 / Math.max(1, apps.length - 1)))]});"></div>`).join("")}</div>
           <div class="row-between small muted" style="margin-top:4px"><span>0</span><span>${b.valeurMax}</span></div></div>
-          <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.libelle")}</th><th class="num">${t("adm.min")}</th><th class="num">${t("adm.max")}</th><th></th></tr></thead><tbody>
-          ${apps.map(a => `<tr><td>${esc(a.libelle)}</td><td class="num">${fmt(a.min)}</td><td class="num">${fmt(a.max)}</td>${actions("appreciation")}</tr>`).join("")}</tbody></table></div>
+          <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.libelle")}</th><th>${t("adm.libelleEn")}</th><th class="num">${t("adm.min")}</th><th class="num">${t("adm.max")}</th><th></th></tr></thead><tbody>
+          ${apps.map(a => `<tr><td>${esc(a.libelle)}</td><td>${a.libelleEn ? esc(a.libelleEn) : `<span class="muted">—</span>`}</td><td class="num">${fmt(a.min)}</td><td class="num">${fmt(a.max)}</td>${actions("appreciation")}</tr>`).join("")}</tbody></table></div>
           <div class="card-body small muted" style="border-top:1px solid var(--border)"><i class="pi pi-info-circle"></i> ${t("adm.infoIntervalles")}</div></div></div>`;
     } else if (tab === "decisions") {
       corps = `<div class="message warn" style="margin-bottom:16px"><i class="pi pi-lock"></i><div class="small">${t("adm.decisionsBloquees")}</div></div>
-        <div class="card"><div class="card-head"><h2>${t("adm.decisions")}</h2></div><div class="table-wrap"><table class="dt"><thead><tr><th>${t("disc.decision")}</th><th class="num">${t("adm.heuresMin")}</th><th class="num">${t("adm.heuresMax")}</th><th class="num">${t("adm.elevesConcernes")}</th></tr></thead><tbody>
-        ${D.decisions.map(d => `<tr><td>${esc(d.libelle)}</td><td class="num">${d.min}</td><td class="num">${d.max === 999 ? "∞" : d.max}</td><td class="num">${D.eleves.filter(e => { const x = discipline(e.id, [1]); return x.total >= d.min && x.total <= d.max; }).length}</td></tr>`).join("")}
+        <div class="card"><div class="card-head"><h2>${t("adm.decisions")}</h2></div><div class="table-wrap"><table class="dt"><thead><tr><th>${t("disc.decision")}</th><th>${t("adm.libelleEn")}</th><th class="num">${t("adm.heuresMin")}</th><th class="num">${t("adm.heuresMax")}</th><th class="num">${t("adm.elevesConcernes")}</th></tr></thead><tbody>
+        ${D.decisions.map(d => `<tr><td>${esc(d.libelle)}</td><td>${d.libelleEn ? esc(d.libelleEn) : `<span class="muted">—</span>`}</td><td class="num">${d.min}</td><td class="num">${d.max === 999 ? "∞" : d.max}</td><td class="num">${D.eleves.filter(e => { const x = discipline(e.id, [1]); return x.total >= d.min && x.total <= d.max; }).length}</td></tr>`).join("")}
         </tbody></table></div></div>`;
     } else if (tab === "annees") {
       corps = `<div class="grid grid-2"><div class="card"><div class="card-head"><h2>${t("adm.annees")}</h2>${can("annee:ajouter") ? `<button class="btn sm"><i class="pi pi-plus"></i>${t("c.ajouter")}</button>` : ""}</div><div class="table-wrap"><table class="dt"><tbody>
@@ -1752,7 +1770,13 @@
     lang: v => { S.lang = v; store.set("lang", v); render(); },
     theme: () => { S.theme = sombre() ? "light" : "dark"; store.set("theme", S.theme); render(); },
     "theme-set": v => { S.theme = v || null; store.set("theme", S.theme); render(); },
-    menu: () => { S.menuOuvert = !S.menuOuvert; render(); },
+    "fermer-menu": () => { S.menuOuvert = false; render(); },
+    // Petit écran : ouvre / ferme le menu par-dessus le contenu ; grand écran : masque / réaffiche la barre latérale
+    menu: () => {
+      if (window.matchMedia("(max-width: 900px)").matches) S.menuOuvert = !S.menuOuvert;
+      else { S.menuReplie = !S.menuReplie; store.set("menuReplie", S.menuReplie); }
+      render();
+    },
     popup: () => { S.popup = !S.popup; render(); },
     role: v => { S.role = Number(v); store.set("role", S.role); S.popup = false; render(); toast("info", t("demo.roleChange"), byId(D.roles, v).nom); },
     deconnexion: () => { S.connecte = false; store.set("connecte", false); S.popup = false; location.hash = "#/login"; render(); },
@@ -1831,6 +1855,7 @@
       toast("success", t("notes.enregistreOk"), p && S.calcule[p.parent] ? t("notes.parentRecalcule", { p: evaluation(p.parent).libelle }) : t("notes.enregistreOkTexte"));
     },
     "calculer-discipline": () => toast("success", t("disc.calculOk"), t("disc.calculOkTexte")),
+    "bul-langue": v => { S.f.bulletin.langue = v; render(); },
     "bul-type": v => { S.f.bulletin.type = v; S.f.bulletin.periode = 1; render(); },
     "apercu-bulletin": v => apercuBulletin(v),
     "pdf-bulletins": () => { fermer(); toast("info", t("bul.pdfLance"), t("bul.pdfLanceTexte")); },
@@ -2152,7 +2177,12 @@
   });
   window.addEventListener("hashchange", render);
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (!S.theme) render(); });
-  document.addEventListener("keydown", ev => { if (ev.key === "Escape") { if (selectOuvert) fermerSelect(); else fermer(); } });
+  document.addEventListener("keydown", ev => {
+    if (ev.key !== "Escape") return;
+    if (selectOuvert) fermerSelect();
+    else if (document.getElementById("dialog-root").innerHTML) fermer();
+    else if (S.menuOuvert) { S.menuOuvert = false; render(); }
+  });
 
   render();
   if (params.get("apercu") && S.connecte) apercuBulletin(Number(params.get("apercu")));

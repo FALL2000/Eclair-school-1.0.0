@@ -163,6 +163,7 @@ class EnteteBulletinDTO(SQLModel):
     periode: Optional[str] = Field(default=None, description="Libellé de l'évaluation ou du trimestre")
     seuil_reussite: float
     date_generation: date
+    langue: str = Field(default="FR", description="Langue du bulletin : FR ou EN")
 
 
 class BulletinClasseDTO(SQLModel):

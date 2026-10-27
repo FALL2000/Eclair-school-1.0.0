@@ -2,7 +2,7 @@ from datetime import date
 
 from fastapi import HTTPException
 
-from common.enumeration import TYPE_NOTATION_PAR_TYPE_SCHOOL, TypeNotation
+from common.enumeration import Langue, TYPE_NOTATION_PAR_TYPE_SCHOOL, TypeNotation
 from common.statistiques import arrondir, calculer_rangs, moyenne, repartition, statistiques
 from config.settings import get_settings
 from models.evaluations.evaluation import Evaluation
@@ -38,6 +38,23 @@ APPRECIATIONS_PAR_DEFAUT = [
     (16, 17.99, "Très bien"),
     (18, 20, "Excellent"),
 ]
+APPRECIATIONS_PAR_DEFAUT_EN = [
+    (0, 4.99, "Very poor"),
+    (5, 7.99, "Poor"),
+    (8, 9.99, "Insufficient"),
+    (10, 11.99, "Fair"),
+    (12, 13.99, "Fairly good"),
+    (14, 15.99, "Good"),
+    (16, 17.99, "Very good"),
+    (18, 20, "Excellent"),
+]
+
+
+def libelle_selon_langue(objet, langue: Langue) -> str:
+    """Libellé anglais (libelle_en) si le bulletin est en anglais et qu'il est renseigné, sinon le libellé français"""
+    if langue == Langue.EN and getattr(objet, "libelle_en", None):
+        return objet.libelle_en
+    return objet.libelle
 
 TRANCHES_REPARTITION = [
     (0, 5, "[0 ; 5["),
@@ -95,16 +112,16 @@ class BulletinService:
         type_school = get_settings().type_school.strip().lower()
         return TYPE_NOTATION_PAR_TYPE_SCHOOL.get(type_school) == TypeNotation.PRIMAIRE
 
-    def _get_appreciations_reference(self) -> list[tuple[float, float, str]]:
-        """Appréciations d'un barème sur 20 s'il en existe, sinon les appréciations par défaut"""
+    def _get_appreciations_reference(self, langue: Langue = Langue.FR) -> list[tuple[float, float, str]]:
+        """Appréciations d'un barème sur 20 s'il en existe, sinon les appréciations par défaut (dans la langue du bulletin)"""
         for bareme in self.bareme_repository.findAll():
             if bareme.valeur_max == BASE_NOTE:
                 appreciations = self.appreciation_repository.findBy(id_bareme=bareme.id)
                 if appreciations:
-                    return [(a.valeur_min, a.valeur_max, a.libelle) for a in appreciations]
-        return APPRECIATIONS_PAR_DEFAUT
+                    return [(a.valeur_min, a.valeur_max, libelle_selon_langue(a, langue)) for a in appreciations]
+        return APPRECIATIONS_PAR_DEFAUT_EN if langue == Langue.EN else APPRECIATIONS_PAR_DEFAUT
 
-    def _get_contexte_classe(self, id_classe: int) -> dict:
+    def _get_contexte_classe(self, id_classe: int, langue: Langue = Langue.FR) -> dict:
         """Charge en une fois tout ce dont les bulletins d'une classe ont besoin pour l'année en cours"""
         annee = self._get_annee_service().get_annee_scolaire()[0]
         classe = self.classe_repository.findOne(id_classe)
@@ -156,7 +173,8 @@ class BulletinService:
             "notes": {(n.id_evaluation, n.id_eleve, n.id_matiere_evalue): n for n in notations},
             "disciplines": {(d.id_evaluation, d.id_eleve): d for d in disciplines},
             "decisions": self.discipline_decision_repository.findAll(),
-            "appreciations_reference": self._get_appreciations_reference(),
+            "appreciations_reference": self._get_appreciations_reference(langue),
+            "langue": langue,
         }
 
     def _get_evaluation(self, id_evaluation: int) -> Evaluation:
@@ -243,17 +261,22 @@ class BulletinService:
                 return libelle
         return None
 
-    def _libelle_rang(self, rang: int, ex_aequo: bool, genre: str) -> str:
+    def _libelle_rang(self, rang: int, ex_aequo: bool, genre: str, langue: Langue = Langue.FR) -> str:
+        if langue == Langue.EN:
+            # 1st, 2nd, 3rd, 4th... 11th, 12th, 13th, 21st, 22nd...
+            suffixe = "th" if 10 <= rang % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(rang % 10, "th")
+            libelle = f"{rang}{suffixe}"
+            return f"{libelle} tie" if ex_aequo else libelle
         if rang == 1:
             libelle = "1ère" if genre == "F" else "1er"
         else:
             libelle = f"{rang}e"
         return f"{libelle} ex" if ex_aequo else libelle
 
-    def _get_decision_discipline(self, nb_heure_total: int, decisions: list) -> str | None:
+    def _get_decision_discipline(self, nb_heure_total: int, decisions: list, langue: Langue = Langue.FR) -> str | None:
         for decision in decisions:
             if decision.nb_heure_min <= nb_heure_total <= decision.nb_heure_max:
-                return decision.libelle
+                return libelle_selon_langue(decision, langue)
         return None
 
     def _get_discipline(self, ctx: dict, id_eleve: int, evaluations: list[Evaluation]) -> dict:
@@ -268,7 +291,7 @@ class BulletinService:
             "nb_heure_obtenu": obtenu,
             "nb_heure_justifie": justifie,
             "nb_heure_total": total,
-            "decision": self._get_decision_discipline(total, ctx["decisions"]) if enregistrements else None,
+            "decision": self._get_decision_discipline(total, ctx["decisions"], ctx["langue"]) if enregistrements else None,
         }
 
     # ------------------------------------------------------------------
@@ -316,7 +339,7 @@ class BulletinService:
                         "rang": None,
                         "rang_libelle": None,
                         "appreciation": (
-                            notation.appreciation.libelle if notation is not None
+                            libelle_selon_langue(notation.appreciation, ctx["langue"]) if notation is not None
                             else self._get_appreciation(note_sur_20, appreciations_ref)
                         ),
                     })
@@ -366,7 +389,7 @@ class BulletinService:
                 **((complements or {}).get(eleve.id, {})),
             }
 
-        self._attribuer_rangs(bulletins)
+        self._attribuer_rangs(bulletins, ctx["langue"])
         return {
             "entete": entete,
             "statistiques_classe": self._statistiques_classe(bulletins, seuil, avec_distinction),
@@ -374,7 +397,7 @@ class BulletinService:
             "bulletins": list(bulletins.values()),
         }
 
-    def _attribuer_rangs(self, bulletins: dict):
+    def _attribuer_rangs(self, bulletins: dict, langue: Langue = Langue.FR):
         """Rang général, rang par groupe et rang par matière (seuls les élèves classés sont rangés)"""
         genres = {id_eleve: b["eleve"]["genre"] for id_eleve, b in bulletins.items()}
 
@@ -382,7 +405,7 @@ class BulletinService:
             for id_eleve, (rang, ex_aequo) in calculer_rangs(valeurs).items():
                 element = cible(id_eleve)
                 element["rang"] = rang
-                element["rang_libelle"] = self._libelle_rang(rang, ex_aequo, genres[id_eleve])
+                element["rang_libelle"] = self._libelle_rang(rang, ex_aequo, genres[id_eleve], langue)
 
         appliquer(
             {i: b["moyenne_generale"] for i, b in bulletins.items() if b["moyenne_generale"] is not None},
@@ -489,6 +512,7 @@ class BulletinService:
             "periode": periode,
             "seuil_reussite": seuil,
             "date_generation": date.today(),
+            "langue": ctx["langue"].value,
         }
 
     def _filtrer_eleve(self, resultat: dict, id_eleve: int | None) -> dict:
@@ -510,10 +534,11 @@ class BulletinService:
     # Bulletins par évaluation, trimestre et année
     # ------------------------------------------------------------------
 
-    def generer_bulletins_evaluation(self, id_classe: int, id_evaluation: int, id_eleve: int | None = None) -> dict:
+    def generer_bulletins_evaluation(self, id_classe: int, id_evaluation: int, id_eleve: int | None = None,
+                                     langue: Langue = Langue.FR) -> dict:
         """Bulletins d'une évaluation : seuil de réussite 10, pas de distinction"""
         try:
-            ctx = self._get_contexte_classe(id_classe)
+            ctx = self._get_contexte_classe(id_classe, langue)
             evaluation = self._get_evaluation(id_evaluation)
             notes_sur_20, notations = self._get_notes_evaluation(ctx, id_evaluation)
             disciplines = {
@@ -532,11 +557,12 @@ class BulletinService:
             raise HTTPException(
                 status_code=500, detail=f"Une erreur lors de la génération des bulletins de l'évaluation: {str(e)}")
 
-    def generer_bulletins_trimestre(self, id_classe: int, id_trimestre: int, id_eleve: int | None = None) -> dict:
+    def generer_bulletins_trimestre(self, id_classe: int, id_trimestre: int, id_eleve: int | None = None,
+                                    langue: Langue = Langue.FR) -> dict:
         """Bulletins d'un trimestre : note d'une matière = moyenne simple des évaluations du trimestre
         (dépendances exclues), seuil de réussite 10, tableau d'honneur à partir de 12"""
         try:
-            ctx = self._get_contexte_classe(id_classe)
+            ctx = self._get_contexte_classe(id_classe, langue)
             trimestre = self.trimestre_repository.findOne(id_trimestre)
             if trimestre is None:
                 raise HTTPException(
@@ -593,13 +619,14 @@ class BulletinService:
                 return regle.decision
         return None
 
-    def generer_bulletins_annuels(self, id_classe: int, data: BulletinAnnuelRequestDTO, id_eleve: int | None = None) -> dict:
+    def generer_bulletins_annuels(self, id_classe: int, data: BulletinAnnuelRequestDTO, id_eleve: int | None = None,
+                                  langue: Langue = Langue.FR) -> dict:
         """Bulletins annuels : moyenne annuelle = moyenne des moyennes trimestrielles ;
         note annuelle d'une matière = moyenne de ses notes trimestrielles ;
         seuil de réussite et règles de décision de fin d'année fournis par la requête"""
         try:
             self._check_regles_decision(data)
-            ctx = self._get_contexte_classe(id_classe)
+            ctx = self._get_contexte_classe(id_classe, langue)
             ids_eleves = [i.id_eleve for i in ctx["inscriptions"]]
             toutes_matieres = list(ctx["matieres"].values())
 

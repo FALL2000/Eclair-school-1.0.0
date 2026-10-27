@@ -46,7 +46,7 @@ Paramètres d'URL utiles pour une démonstration :
 | Évaluations et dépendances | `#/evaluations` | `/evaluation/*`, `/evaluation/add-dependances/{id}` | `evaluation:consulter` |
 | Saisie des notes | `#/notes` | `/notation/list`, `/add-bulk`, `/update-bulk`, `/calculer` | `notation:consulter` |
 | Discipline | `#/discipline` | `/discipline-eleve/*` | `discipline_eleve:consulter` |
-| Bulletins | `#/bulletins` | `/bulletin/evaluation`, `/bulletin/trimestre`, `/bulletin/annuel` | `bulletin:generer` |
+| Bulletins (langue du bulletin FR / EN : libellés, rangs 1st/2nd…, appréciations et décisions disciplinaires en anglais via `libelle_en`, sinon libellé français) | `#/bulletins` | `/bulletin/evaluation`, `/bulletin/trimestre`, `/bulletin/annuel` avec `?langue=FR|EN` (FR par défaut) | `bulletin:generer` |
 | Pensions et règlements | `#/scolarite` | `/reglement/by-classe/{id}/tranche/{id}?statut_paiement=`, `/reglement/annuler/{id}` | `reglement:consulter` |
 | Paramétrage | `#/administration` | sections, cycles, niveaux, classes, matières évaluées, barèmes, appréciations, décisions, années, configuration | `classe:consulter` |
 | Utilisateurs et rôles | `#/utilisateurs` | `/user/*`, `/role/*` | `utilisateur:consulter` |
@@ -62,6 +62,7 @@ Paramètres d'URL utiles pour une démonstration :
 | Filtres | `p-select`, `p-inputtext` avec `p-iconfield`, `p-datepicker` |
 | Toutes les listes de sélection | `p-select` avec **`[filter]="true"`** (recherche dans la liste, insensible aux accents et à la casse ; Entrée choisit le premier résultat). À définir une fois par défaut dans un composant partagé |
 | Inscription — affectation | **Niveau** puis **Classe** : la classe est désactivée tant que le niveau n'est pas choisi, puis ne propose que les classes de ce niveau |
+| Identité de l'établissement (simulée dans `data.js` → `ecole`) | barre latérale (bloc logo + nom sous la marque Eclair School), écran de connexion, en-tête des documents imprimés (reçu, bulletin) ; le logo et le nom d'Eclair School restent dans la marque et en pied des documents (« Document généré par Eclair School ») | à créer : table de configuration de l'école avec `nom`, `sigle`, `ville`, `adresse`, `telephone`, `email`, `devise`, `logo` (fichier image) |
 | Filtre section > cycle > niveau > classe | composant Angular partagé (4 `p-select` liés) utilisé par les écrans Élèves, Emploi du temps, Appel, Notes, Discipline, Bulletins et Règlements ; sélection commune aux écrans et mémorisée. La structure (sections, cycles, niveaux, classes) est chargée **une seule fois** et mise en cache : choisir dans les listes ne fait aucun appel au backend |
 | Chargement des données | bouton **Afficher** (ou **Rechercher** sur Élèves), actif quand la classe est choisie : un seul appel par clic. Les données restent affichées tant que les filtres ne changent pas |
 | Élèves | recherche dans toute l'école (≥ 3 caractères, Entrée ou bouton, 20 résultats max → `GET /eleves/search?q=`) et élèves d'une classe **paginés** (`GET /eleves/by-classe/{id}?page=&page_size=&q=&genre=`) : le filtre dans la classe et le genre sont appliqués par le backend, au clic sur « Filtrer » ou avec Entrée |

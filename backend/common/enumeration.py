@@ -28,6 +28,12 @@ class MoyenPaiement(str, Enum):
 MOYENS_PAIEMENT_AVEC_COMPTE = (MoyenPaiement.COMPTE_BANCAIRE, MoyenPaiement.MOBILE)
 
 
+class Langue(str, Enum):
+    """Langue de génération d'un document (bulletin)"""
+    FR = "FR"
+    EN = "EN"
+
+
 class TypeNotation(str, Enum):
     PRIMAIRE = "Primaire"
     SECONDAIRE = "Secondaire"

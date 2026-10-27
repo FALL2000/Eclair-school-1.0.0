@@ -12,6 +12,12 @@ class AppreciationBase(SQLModel):
         description="Libellé de l'appréciation",
         nullable=False,
     )
+    libelle_en: Optional[str] = Field(
+        default=None,
+        max_length=60,
+        description="Libellé de l'appréciation en anglais (bulletins en anglais)",
+        nullable=True,
+    )
     valeur_min: float = Field(
         description="Valeur minimale pour cette appréciation (incluse, 2 décimales)",
         nullable=False,
@@ -33,6 +39,7 @@ class AppreciationCreateDTO(AppreciationBase):
 
 class AppreciationUpdateDTO(SQLModel):
     libelle: Optional[str] = None
+    libelle_en: Optional[str] = Field(default=None, max_length=60)
     valeur_min: Optional[float] = None
     valeur_max: Optional[float] = None
     id_bareme: Optional[int] = None

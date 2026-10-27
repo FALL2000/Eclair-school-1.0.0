@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
 from common.dependencies import get_db, require_permission
+from common.enumeration import Langue
 from common.permissions import Action, Module
 from repositories.administration.annee_repository import AnneeRepository
 from repositories.administration.appreciation_repository import AppreciationRepository
@@ -54,8 +55,9 @@ def generer_bulletins_evaluation(
     id_classe: Annotated[int, Query(description="Id de la classe")] = ...,
     id_evaluation: Annotated[int, Query(description="Id de l'évaluation")] = ...,
     id_eleve: Annotated[int | None, Query(description="Ne retourner que le bulletin de cet élève (optionnel)")] = None,
+    langue: Annotated[Langue, Query(description="Langue du bulletin : FR (défaut) ou EN")] = Langue.FR,
 ):
-    return bulletin_service.generer_bulletins_evaluation(id_classe, id_evaluation, id_eleve)
+    return bulletin_service.generer_bulletins_evaluation(id_classe, id_evaluation, id_eleve, langue)
 
 
 @router.get(
@@ -70,8 +72,9 @@ def generer_bulletins_trimestre(
     id_classe: Annotated[int, Query(description="Id de la classe")] = ...,
     id_trimestre: Annotated[int, Query(description="Id du trimestre")] = ...,
     id_eleve: Annotated[int | None, Query(description="Ne retourner que le bulletin de cet élève (optionnel)")] = None,
+    langue: Annotated[Langue, Query(description="Langue du bulletin : FR (défaut) ou EN")] = Langue.FR,
 ):
-    return bulletin_service.generer_bulletins_trimestre(id_classe, id_trimestre, id_eleve)
+    return bulletin_service.generer_bulletins_trimestre(id_classe, id_trimestre, id_eleve, langue)
 
 
 @router.post(
@@ -86,5 +89,6 @@ def generer_bulletins_annuels(
     _: Annotated[dict[str, Any], Depends(require_permission(Module.BULLETIN, Action.GENERER))],
     id_classe: Annotated[int, Query(description="Id de la classe")] = ...,
     id_eleve: Annotated[int | None, Query(description="Ne retourner que le bulletin de cet élève (optionnel)")] = None,
+    langue: Annotated[Langue, Query(description="Langue du bulletin : FR (défaut) ou EN")] = Langue.FR,
 ):
-    return bulletin_service.generer_bulletins_annuels(id_classe, data, id_eleve)
+    return bulletin_service.generer_bulletins_annuels(id_classe, data, id_eleve, langue)
