@@ -43,11 +43,11 @@ class DisciplineEleveService:
     def _session(self):
         return self.discipline_repository.session
 
-    def _get_id_decision(self, nb_heure_total: int) -> int | None:
-        """Retourne l'id de la décision disciplinaire dont l'intervalle contient nb_heure_total
-        (None si aucune décision ne correspond)"""
+    def _get_id_decision(self, nb_heure_non_justifie: int) -> int | None:
+        """Retourne l'id de la décision disciplinaire dont l'intervalle contient le nombre d'heures
+        d'absence NON justifiées (nb_heure_obtenu) ; None si aucune décision ne correspond"""
         decisions = self.discipline_decision_repository.find_chevauchement(
-            nb_heure_total, nb_heure_total)
+            nb_heure_non_justifie, nb_heure_non_justifie)
         return decisions[0].id if decisions else None
 
     def _get_annee_service(self):
@@ -135,7 +135,7 @@ class DisciplineEleveService:
         self._check_total(nouvelle)
         for key, value in update_data.items():
             setattr(db_discipline, key, value)
-        db_discipline.id_discipline_decision = self._get_id_decision(db_discipline.nb_heure_total)
+        db_discipline.id_discipline_decision = self._get_id_decision(db_discipline.nb_heure_obtenu)
         return self.discipline_repository.save(db_discipline)
 
     def _check_discipline_not_exists(self, id_eleve: int, id_annee: int, id_classe: int, id_evaluation: int):
@@ -166,7 +166,7 @@ class DisciplineEleveService:
             discipline_dict["id_classe"] = id_classe
             discipline_dict["id_evaluation"] = id_evaluation
             discipline_dict["id_annee"] = annee.id
-            discipline_dict["id_discipline_decision"] = self._get_id_decision(discipline_in.nb_heure_total)
+            discipline_dict["id_discipline_decision"] = self._get_id_decision(discipline_in.nb_heure_obtenu)
             db_discipline = DisciplineEleve.model_validate(discipline_dict)
             new_discipline = self.discipline_repository.save(db_discipline)
             self._session().commit()
@@ -207,7 +207,7 @@ class DisciplineEleveService:
                     "id_classe": data.id_classe,
                     "id_evaluation": data.id_evaluation,
                     "id_annee": annee.id,
-                    "id_discipline_decision": self._get_id_decision(d.nb_heure_total),
+                    "id_discipline_decision": self._get_id_decision(d.nb_heure_obtenu),
                 }
                 for d in data.disciplines
             ]
@@ -303,7 +303,7 @@ class DisciplineEleveService:
                 "nb_heure_obtenu": nb_heure_obtenu,
                 "nb_heure_justifie": nb_heure_justifie,
                 "nb_heure_total": nb_heure_total,
-                "id_discipline_decision": self._get_id_decision(nb_heure_total),
+                "id_discipline_decision": self._get_id_decision(nb_heure_obtenu),
             }
             db_discipline = existantes.get(id_eleve)
             if db_discipline is None:

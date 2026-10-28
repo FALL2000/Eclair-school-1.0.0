@@ -55,6 +55,8 @@ class StatistiquesDisciplineDTO(SQLModel):
     total_heures_justifiees: int
     total_heures_non_justifiees: int
     moyenne_heures_par_eleve: Optional[float] = None
+    moyenne_heures_non_justifiees_par_eleve: Optional[float] = Field(
+        default=None, description="Heures non justifiées par élève (base des décisions disciplinaires)")
     decisions: list[EffectifDecisionDTO]
 
 
@@ -96,6 +98,21 @@ class EleveBulletinDTO(SQLModel):
     is_redoublant: bool
 
 
+class NoteEvaluationDTO(SQLModel):
+    """Note d'une matière pour une évaluation affichée en colonne (évaluation du trimestre ou dépendance)"""
+    id_evaluation: int
+    note: Optional[float] = Field(default=None, description="Note dans le barème de la matière")
+    note_sur_20: Optional[float] = None
+
+
+class EvaluationColonneDTO(SQLModel):
+    """Évaluation affichée en colonne sur le bulletin"""
+    id_evaluation: int
+    code: str
+    libelle: str
+    pourcentage: Optional[float] = Field(default=None, description="Poids de la dépendance dans l'évaluation (bulletin d'évaluation)")
+
+
 class LigneMatiereDTO(SQLModel):
     id_matiere_evalue: int
     code: str
@@ -108,6 +125,8 @@ class LigneMatiereDTO(SQLModel):
     rang: Optional[int] = None
     rang_libelle: Optional[str] = None
     appreciation: Optional[str] = None
+    notes_evaluations: list[NoteEvaluationDTO] = Field(
+        default=[], description="Notes des évaluations de entete.evaluations, dans le même ordre")
 
 
 class GroupeBulletinDTO(SQLModel):
@@ -164,6 +183,10 @@ class EnteteBulletinDTO(SQLModel):
     seuil_reussite: float
     date_generation: date
     langue: str = Field(default="FR", description="Langue du bulletin : FR ou EN")
+    evaluations: list[EvaluationColonneDTO] = Field(
+        default=[], description="Colonnes de notes : évaluations du trimestre (bulletin trimestriel), "
+                                "évaluations de l'année (bulletin annuel) "
+                                "ou dépendances de l'évaluation (bulletin d'évaluation calculée)")
 
 
 class BulletinClasseDTO(SQLModel):

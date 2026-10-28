@@ -17,12 +17,12 @@ class DisciplineDecisionBase(SQLModel):
     )
     nb_heure_min: int = Field(
         ge=0,
-        description="Nombre minimal d'heures d'absence pour cette décision",
+        description="Nombre minimal d'heures d'absence NON justifiées pour cette décision",
         nullable=False,
     )
     nb_heure_max: int = Field(
         ge=0,
-        description="Nombre maximal d'heures d'absence pour cette décision",
+        description="Nombre maximal d'heures d'absence NON justifiées pour cette décision",
         nullable=False,
     )
 

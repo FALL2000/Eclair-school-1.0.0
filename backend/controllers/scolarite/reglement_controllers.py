@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query
@@ -11,8 +12,10 @@ from repositories.administration.classe_repository import ClasseRepository
 from repositories.scolarite.reglement_repository import ReglementRepository
 from repositories.scolarite.tranche_pension_repository import TranchePensionRepository
 from schemas.scolarite.reglement_dto import (
+    PaginatedHistoriqueReglement,
     PaginatedReglement,
     ReglementCreateDTO,
+    ReglementRecuDTO,
     ReglementEleveTrancheResponseDTO,
     ReglementParClasseResponseDTO,
     ReglementResponseDTO,
@@ -87,6 +90,38 @@ def delete_reglement(
     _: Annotated[dict[str, Any], Depends(require_super_admin)],
 ):
     return reglement_service.delete_reglement(reglement_id)
+
+
+@router.get(
+    "/recu/{reglement_id}",
+    summary="Données du reçu d'un règlement (impression ou duplicata) : situation de la tranche au moment du règlement",
+    status_code=200,
+    response_model=ReglementRecuDTO,
+)
+def get_recu_reglement(
+    reglement_id: int,
+    reglement_service: Annotated[ReglementService, Depends(get_reglement_service)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.REGLEMENT, Action.CONSULTER))],
+):
+    return reglement_service.get_recu(reglement_id)
+
+
+@router.get(
+    "/historique",
+    summary="Historique des règlements de l'année en cours (plus récents en premier, paginé, filtres par dates et par élève)",
+    status_code=200,
+    response_model=PaginatedHistoriqueReglement,
+)
+def get_historique_reglements(
+    reglement_service: Annotated[ReglementService, Depends(get_reglement_service)],
+    _: Annotated[dict[str, Any], Depends(require_permission(Module.REGLEMENT, Action.CONSULTER))],
+    date_debut: Annotated[date | None, Query(description="Date de règlement minimale (incluse)")] = None,
+    date_fin: Annotated[date | None, Query(description="Date de règlement maximale (incluse)")] = None,
+    q: Annotated[str | None, Query(max_length=100, description="Nom, prénom ou matricule de l'élève")] = None,
+    page: Annotated[int | None, Query(ge=1, description="Page actuelle")] = None,
+    page_size: Annotated[int | None, Query(ge=1, le=200, description="Nombre d'éléments par page")] = None,
+):
+    return reglement_service.get_historique(date_debut, date_fin, q, page, page_size)
 
 
 @router.get(

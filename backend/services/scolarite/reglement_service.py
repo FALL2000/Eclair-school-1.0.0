@@ -10,6 +10,8 @@ from repositories.administration.classe_repository import ClasseRepository
 from repositories.scolarite.reglement_repository import ReglementRepository
 from repositories.scolarite.tranche_pension_repository import TranchePensionRepository
 from schemas.scolarite.reglement_dto import (
+    PaginatedHistoriqueReglement,
+    ReglementRecuDTO,
     PaginatedReglement,
     ReglementCreateDTO,
     ReglementParClasseResponseDTO,
@@ -275,3 +277,82 @@ class ReglementService:
             raise HTTPException(
                 status_code=500,
                 detail=f"Une erreur lors de la récupération des règlements par classe et par tranche: {str(e)}")
+
+    def get_historique(
+        self, date_debut: date | None, date_fin: date | None, q: str | None,
+        page: int | None, page_size: int | None,
+    ) -> PaginatedHistoriqueReglement:
+        """Historique des règlements de l'année scolaire en cours, du plus récent au plus ancien, paginé.
+        Filtres optionnels : intervalle de dates de règlement et nom, prénom ou matricule de l'élève."""
+        try:
+            if date_debut and date_fin and date_debut > date_fin:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error_code": "INTERVALLE_DATES_INVALIDE",
+                        "message": "La date de debut doit etre anterieure ou egale a la date de fin",
+                    },
+                )
+            annee = self._get_annee_service().get_annee_scolaire()[0]
+            termes = [terme for terme in (q or "").split() if terme]
+            total_items, total_valide = self.reglement_repository.count_historique(annee.id, date_debut, date_fin, termes)
+            if page_size is None or page is None:
+                page_size = total_items if total_items > 0 else 1
+                page = 1
+            total_pages = max(1, (total_items + page_size - 1) // page_size)
+            page = min(max(page, 1), total_pages)
+            lignes = self.reglement_repository.find_historique(
+                annee.id, date_debut, date_fin, termes, offset=(page - 1) * page_size, limit=page_size)
+            return PaginatedHistoriqueReglement(
+                total_valide=round(total_valide, 2),
+                page=page,
+                page_size=page_size,
+                total_items=total_items,
+                total_pages=total_pages,
+                reglements=[{
+                    "id": r.id, "date_reglement": r.date_reglement, "type": r.type, "montant": r.montant,
+                    "statut": r.statut, "id_annee": r.id_annee, "id_tranche_pension": r.id_tranche_pension,
+                    "tranche": tranche, "id_eleve": eleve.id, "matricule": eleve.matricule, "nom": eleve.nom,
+                    "prenom": eleve.prenom, "id_classe": id_classe, "classe": classe,
+                    "id_user": r.id_user, "user": user,
+                } for r, eleve, tranche, id_classe, classe, user in lignes],
+            )
+        except HTTPException as http_exec:
+            raise http_exec
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"Une erreur lors de la recuperation de l'historique des reglements: {str(e)}")
+
+    @staticmethod
+    def numero_recu(reglement: Reglement) -> str:
+        """Numéro du reçu de règlement : REG-<année du règlement>-<id sur 6 chiffres>"""
+        return f"REG-{reglement.date_reglement.year}-{reglement.id:06d}"
+
+    def get_recu(self, reglement_id: int) -> ReglementRecuDTO:
+        """Données du reçu d'un règlement (ou de son duplicata) : élève, classe de l'année, tranche,
+        montant versé, cumul versé pour la tranche jusqu'à ce règlement et reste à payer"""
+        try:
+            ligne = self.reglement_repository.find_ligne_recu(reglement_id)
+            if ligne is None:
+                self._check_reglement_exists(None)
+            r, eleve, tranche_libelle, id_classe, classe, user = ligne
+            tranche = self.tranche_pension_repository.findOne(r.id_tranche_pension, load_relations=False)
+            annee = self.annee_repository.findOne(r.id_annee)
+            cumul = round(self.reglement_repository.cumul_tranche(r), 2)
+            return ReglementRecuDTO(
+                id=r.id, date_reglement=r.date_reglement, type=r.type, montant=r.montant, statut=r.statut,
+                id_annee=r.id_annee, id_tranche_pension=r.id_tranche_pension, tranche=tranche_libelle,
+                id_eleve=eleve.id, matricule=eleve.matricule, nom=eleve.nom, prenom=eleve.prenom,
+                id_classe=id_classe, classe=classe, id_user=r.id_user, user=user,
+                numero=self.numero_recu(r),
+                annee=annee.libelle if annee else "",
+                numero_ordre_tranche=tranche.numero_ordre,
+                montant_tranche=tranche.montant,
+                cumul_verse=cumul,
+                reste_a_payer=round(max(tranche.montant - cumul, 0), 2),
+            )
+        except HTTPException as http_exec:
+            raise http_exec
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"Une erreur lors de la recuperation du recu: {str(e)}")

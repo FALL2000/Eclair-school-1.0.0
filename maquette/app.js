@@ -32,6 +32,7 @@
       eleves: { q: "", qApplique: "", genre: "", page: 1, pageSize: 10 },
       notes: { evaluation: 1, matiere: 5 },
       discipline: { evaluation: 1 },
+      trNiveau: { v: 5 }, // tranches de pension : niveau affiché
       bulletin: { langue: "FR", type: "trimestre", periode: 1, seuil: 10, regles: [
         { min: 0, max: 8.99, decision: "Redouble" },
         { min: 9, max: 9.99, decision: "Promu en cas de rattrapage" },
@@ -52,6 +53,8 @@
     qEcole: "",
     // Historique des inscriptions : filtres saisis / appliqués (envoyés au backend) et pagination
     hist: { du: "", au: "", q: "", applique: { du: "", au: "", q: "" }, page: 1, pageSize: 10 },
+    // Historique des règlements : filtres saisis / appliqués (GET /reglement/historique) et pagination
+    hreg: { du: "", au: "", q: "", applique: { du: "", au: "", q: "" }, page: 1, pageSize: 10 },
     editInsc: null,
     // Enseignants : filtres saisis / appliqués (backend), pagination, dialogues
     ens: { q: "", matiere: "", applique: { q: "", matiere: "" }, page: 1, pageSize: 10 },
@@ -228,7 +231,8 @@
       const d = D.disciplines[ev]?.[idEl];
       if (d) { nj += d.nonJustifie; j += d.justifie; trouve = true; }
     }
-    return { nj, j, total: nj + j, decision: trouve ? decisionDiscipline(nj + j) : null };
+    // La décision disciplinaire porte sur les heures NON justifiées
+    return { nj, j, total: nj + j, decision: trouve ? decisionDiscipline(nj) : null };
   }
 
   // Bulletins d'une classe : periode = {type: evaluation|trimestre|annuel, id}
@@ -323,7 +327,14 @@
   // Établissement (table de configuration de l'école) : logo et nom
   const blocEcole = () => `<div class="ecole-card"><span class="logo-ecole">${D.ecole.logo}</span><div class="ecole-infos"><div class="ecole-nom" title="${esc(D.ecole.nom)}">${esc(D.ecole.nom)}</div><div class="small muted">${esc(D.ecole.ville)} · ${esc(D.ecole.annee)}</div></div></div>`;
   // En-tête des documents imprimés : logo, nom et coordonnées de l'école à gauche ; droite = titre du document
-  const enteteDocument = (droite, bilingue = false) => `<div class="ph"><div class="doc-ecole"><span class="logo-ecole">${D.ecole.logo}</span><div>
+  // Bandeau officiel : République du Cameroun et ministère selon le type d'école (type_school du .env)
+  // À gauche la langue du document, à droite l'autre langue (en retrait)
+  const cleMinistere = () => D.ecole.typeSchool === "education_base" ? "doc.minedub" : "doc.minesec";
+  const bandeauOfficiel = () => {
+    const bloc = (lang, cls) => `<div class="${cls}"><div>${tL(lang, "doc.republique")}</div><div class="devise-nat">${tL(lang, "doc.deviseNationale")}</div><div>${tL(lang, cleMinistere())}</div></div>`;
+    return `<div class="doc-officiel">${bloc(S.lang, "l1")}${bloc(autreLangue(), "l2")}</div>`;
+  };
+  const enteteDocument = (droite, bilingue = false) => `${bandeauOfficiel()}<div class="ph"><div class="doc-ecole"><span class="logo-ecole">${D.ecole.logo}</span><div>
       <div class="doc-ecole-nom">${esc(D.ecole.nom)}</div>
       <div class="doc-ecole-coord">${esc(D.ecole.adresse)} · ${esc(D.ecole.telephone)}</div>
       <div class="doc-ecole-coord">${bilingue ? biLigne("c.anneeScolaire") : t("c.anneeScolaire")} ${esc(D.ecole.annee)} · <i>${esc(D.ecole.devise)}</i></div></div></div>${droite}</div>`;
@@ -1328,8 +1339,51 @@
       D.trimestres.map(tr => `<div class="card" style="margin-bottom:16px"><div class="card-head"><h2>${esc(tr.libelle)}</h2><span class="tag secondary">${D.evaluations.filter(e => e.trimestre === tr.id).length} ${t("eval.evaluations")}</span></div>
         <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.code")}</th><th>${t("c.libelle")}</th><th>${t("eval.periode")}</th><th>${t("eval.type")}</th><th>${t("c.statut")}</th><th></th></tr></thead><tbody>
         ${D.evaluations.filter(e => e.trimestre === tr.id).map(ev => `<tr><td class="mono">${esc(ev.code)}</td><td><b>${esc(ev.libelle)}</b></td><td>${fmtDate(ev.debut)} → ${fmtDate(ev.fin)}</td><td>${typeEval(ev)}</td><td>${statutEval(ev)}</td>
-          <td class="right">${can("evaluation:modifier") ? `<button class="btn text sm" data-act="dependances" data-v="${ev.id}"><i class="pi pi-sitemap"></i>${t("eval.dependances")}</button><button class="btn text icon sm" title="${t("c.modifier")}"><i class="pi pi-pencil"></i></button>` : ""}${can("evaluation:supprimer") ? `<button class="btn text icon sm" data-act="supprimer-evaluation" data-v="${ev.id}" title="${t("c.supprimer")}"><i class="pi pi-trash" style="color:var(--danger)"></i></button>` : ""}</td></tr>`).join("")}
+          <td class="right">${can("evaluation:modifier") ? `<button class="btn text sm" data-act="dependances" data-v="${ev.id}"><i class="pi pi-sitemap"></i>${t("eval.dependances")}</button><button class="btn text icon sm" data-act="modifier-evaluation" data-v="${ev.id}" title="${t("c.modifier")}"><i class="pi pi-pencil"></i></button>` : ""}${can("evaluation:supprimer") ? `<button class="btn text icon sm" data-act="supprimer-evaluation" data-v="${ev.id}" title="${t("c.supprimer")}"><i class="pi pi-trash" style="color:var(--danger)"></i></button>` : ""}</td></tr>`).join("")}
         </tbody></table></div></div>`).join("");
+  }
+  // Ajout (POST /evaluation/add?id_trimestre=) et modification (PATCH /evaluation/update/{id}) d'une évaluation
+  function dialogEvaluation(id) {
+    const ev = id ? evaluation(id) : { code: "", libelle: "", trimestre: D.trimestres[0].id, debut: "", fin: "" };
+    const deps = id ? depsDe(id) : [], parent = id ? parentDe(id) : null;
+    const liens = [
+      ...deps.map(d => t("eval.lienDependance", { e: evaluation(d.dependance).libelle, d: fmtDate(evaluation(d.dependance).debut), f: fmtDate(evaluation(d.dependance).fin) })),
+      ...(parent ? [t("eval.lienParent", { e: evaluation(parent.parent).libelle, d: fmtDate(evaluation(parent.parent).debut), f: fmtDate(evaluation(parent.parent).fin) })] : []),
+    ];
+    const champ = (cle, label, valeur, type = "text") => `<div class="field"><label for="ev-${cle}">${t(label)} *</label><input class="input" id="ev-${cle}" name="${cle}" type="${type}" value="${esc(valeur)}" required></div>`;
+    dialog(t(id ? "eval.modifierTitre" : "eval.ajouter", { e: ev.libelle }), `<form id="form-evaluation" data-form="evaluation" data-id="${id || ""}"><div class="stack">
+      <div class="form-grid">
+        ${champ("code", "c.code", ev.code)}${champ("libelle", "c.libelle", ev.libelle)}
+        <div class="field"><label>${t("c.trimestre")} *</label><select class="select" name="trimestre">${D.trimestres.map(x => option(x.id, x.libelle, ev.trimestre)).join("")}</select></div>
+        <div class="field"></div>
+        ${champ("debut", "eval.debut", ev.debut, "date")}${champ("fin", "eval.fin", ev.fin, "date")}
+      </div>
+      ${liens.length ? `<div class="message"><i class="pi pi-link"></i><div class="small"><b>${t("eval.liensTitre")}</b>${liens.map(l => `<div>${l}</div>`).join("")}</div></div>` : ""}
+      <div id="ev-erreur"></div></div></form>`,
+      `<button class="btn secondary" data-act="fermer">${t("c.annuler")}</button><button class="btn" type="submit" form="form-evaluation"><i class="pi pi-check"></i>${t("c.enregistrer")}</button>`);
+  }
+  function enregistrerEvaluation(form) {
+    const id = Number(form.dataset.id) || null;
+    const d = Object.fromEntries(new FormData(form).entries());
+    const v = { code: d.code.trim(), libelle: d.libelle.trim(), trimestre: Number(d.trimestre), debut: d.debut, fin: d.fin };
+    // Mêmes contrôles que le backend : code unique, début <= fin, cohérence avec les dépendances et l'évaluation parente
+    const dansPeriode = (x, p) => x.debut >= p.debut && x.fin <= p.fin;
+    const depHors = id ? depsDe(id).map(l => evaluation(l.dependance)).find(x => x.trimestre !== v.trimestre || !dansPeriode(x, v)) : null;
+    const lienParent = id ? parentDe(id) : null, par = lienParent ? evaluation(lienParent.parent) : null;
+    const erreur = !v.code || !v.libelle || !v.debut || !v.fin ? t("eval.errChamps")
+      : D.evaluations.some(x => x.id !== id && x.code.toLowerCase() === v.code.toLowerCase()) ? t("eval.errCode", { c: v.code })
+      : v.debut > v.fin ? t("eval.errDates")
+      : depHors ? t(depHors.trimestre !== v.trimestre ? "eval.errTrimestreDep" : "eval.errPeriodeDep", { e: depHors.libelle, d: fmtDate(depHors.debut), f: fmtDate(depHors.fin) })
+      : par && (par.trimestre !== v.trimestre || !dansPeriode(v, par)) ? t(par.trimestre !== v.trimestre ? "eval.errTrimestreParent" : "eval.errPeriodeParent", { e: par.libelle, d: fmtDate(par.debut), f: fmtDate(par.fin) })
+      : null;
+    if (erreur) {
+      document.getElementById("ev-erreur").innerHTML = `<div class="message danger"><i class="pi pi-times-circle"></i><div class="small">${erreur}</div></div>`;
+      return;
+    }
+    if (id) Object.assign(evaluation(id), v);
+    else D.evaluations.push({ id: Date.now(), ...v });
+    fermer(); render();
+    toast("success", t(id ? "eval.modifieeOk" : "eval.ajouteeOk"), `${v.code} · ${v.libelle}`);
   }
   function dialogDependances(idEval) {
     const ev = evaluation(idEval);
@@ -1455,7 +1509,7 @@
         <div class="card"><div class="card-head"><h2>${t("bul.parGenre")}</h2></div><div class="card-body stack" style="gap:14px">${res.parGenre.map(g => `<div><div class="row-between"><b>${t(g.g === "F" ? "c.filles" : "c.garcons")}</b><span class="small muted">${g.effectif} ${t("c.eleves")} · ${t("bul.moyenne")} ${fmt(g.moyenne)}</span></div><div class="progress success" style="margin-top:6px"><div style="width:${g.taux || 0}%"></div></div><div class="small muted" style="margin-top:4px">${t("bul.reussite")} : ${g.taux == null ? "—" : fmt(g.taux) + " %"}</div></div>`).join("")}</div></div>
         <div class="card"><div class="card-head"><h2>${f.type === "annuel" ? t("bul.decisionsFinales") : t("bul.discipline")}</h2></div><div class="card-body stack" style="gap:10px">
           ${f.type === "annuel" ? res.decisionsFinales.map(d => `<div class="row-between"><span>${esc(d.d)}</span><b>${d.n}</b></div>`).join("")
-            : `<div class="row-between"><span>${t("disc.totalHeures")}</span><b>${res.bulletins.reduce((x, b) => x + b.discipline.total, 0)} h</b></div><div class="row-between"><span>${t("disc.moyenneParEleve")}</span><b>${fmt(res.bulletins.reduce((x, b) => x + b.discipline.total, 0) / res.bulletins.length)} h</b></div>
+            : `<div class="row-between"><span>${t("disc.totalNonJustifiees")}</span><b>${res.bulletins.reduce((x, b) => x + b.discipline.nj, 0)} h</b></div><div class="row-between"><span>${t("disc.moyenneNonJustifieesParEleve")}</span><b>${fmt(res.bulletins.reduce((x, b) => x + b.discipline.nj, 0) / res.bulletins.length)} h</b></div>
                ${D.decisions.map(d => ({ d: d.libelle, n: res.bulletins.filter(b => b.discipline.decision === d.libelle).length })).filter(x => x.n).map(x => `<div class="row-between"><span>${esc(x.d)}</span>${tag("secondary", x.n)}</div>`).join("")}`}
         </div></div>
       </div>
@@ -1481,30 +1535,77 @@
     const b = res.bulletins.find(x => x.e.id === Number(idEleve));
     const libellePeriode = periode.type === "evaluation" ? evaluation(periode.id).libelle : periode.type === "trimestre" ? byId(D.trimestres, periode.id).libelle : t("bul.annee", { a: D.ecole.annee });
     const e = b.e;
-    const papier = `<div class="paper">
-      ${enteteDocument(`<div style="text-align:right"><h2>${t("bul.bulletinDeNotes")}</h2><div style="font-weight:700">${esc(libellePeriode)}</div></div>`)}
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 16px">
-        <div><span style="color:#64748b">${t("c.eleve")} :</span> <b>${esc(e.nom)} ${esc(e.prenom)}</b></div>
-        <div><span style="color:#64748b">${t("c.matricule")} :</span> <b>${esc(e.matricule)}</b></div>
-        <div><span style="color:#64748b">${t("c.classe")} :</span> <b>${esc(classe(e.classe).libelle)}</b> (${res.stats.effectif} ${t("c.eleves")})</div>
-        <div><span style="color:#64748b">${t("eleve.naissance")} :</span> ${fmtDate(e.naissance)} · ${esc(e.lieu)}</div>
-        <div><span style="color:#64748b">${t("c.genre")} :</span> ${e.genre === "F" ? t("c.fille") : t("c.garcon")}</div>
-        <div><span style="color:#64748b">${t("eleve.redoublant")} :</span> ${t(e.redoublant ? "c.oui" : "c.non")}</div>
+    // Colonnes de notes : évaluations du trimestre (bulletin trimestriel) ou dépendances de l'évaluation calculée
+    // Bulletin annuel : toutes les évaluations de l'année (celles qui comptent dans les trimestres)
+    const colonnes = periode.type === "trimestre" ? evalsTrimestre(periode.id).map(ev => ({ ev }))
+      : periode.type === "annuel" ? D.trimestres.flatMap(tr => evalsTrimestre(tr.id)).map(ev => ({ ev }))
+      : periode.type === "evaluation" ? depsDe(periode.id).map(d => ({ ev: evaluation(d.dependance), pct: d.pourcentage })) : [];
+    const noteColonne = (c, l) => {
+      const n = noteEval(c.ev.id, l.m.id, e.id);
+      if (n == null) return t("notes.nc");
+      return fmt(periode.type === "evaluation" ? n : sur20(n, l.m)); // trimestre et année : sur 20 ; dépendances : dans le barème de la matière
+    };
+    const enteteColonnes = colonnes.map(c => `<th class="num" title="${esc(c.ev.libelle)}">${esc(c.ev.code)}${c.pct ? `<div class="pct">${c.pct} %</div>` : ""}</th>`).join("");
+    const papier = `<div class="paper a5">
+      ${enteteDocument(`<div style="text-align:right;flex:none"><h2>${bi("bul.bulletinDeNotes")}</h2><div style="font-weight:700">${esc(libellePeriode)}</div></div>`, true)}
+      <div class="infos-eleve">
+        <div><span class="lbl">${biLigne("c.eleve")} :</span> <b>${esc(e.nom)} ${esc(e.prenom)}</b></div>
+        <div><span class="lbl">${biLigne("c.matricule")} :</span> <b>${esc(e.matricule)}</b></div>
+        <div><span class="lbl">${biLigne("c.classe")} :</span> <b>${esc(classe(e.classe).libelle)}</b> (${res.stats.effectif} ${biLigne("c.eleves")})</div>
+        <div><span class="lbl">${biLigne("eleve.naissance")} :</span> ${e.naissance.split("-").reverse().join("/")} · ${esc(e.lieu)}</div>
+        <div><span class="lbl">${biLigne("c.genre")} :</span> ${biLigne(e.genre === "F" ? "c.fille" : "c.garcon")}</div>
+        <div><span class="lbl">${biLigne("eleve.redoublant")} :</span> ${biLigne(e.redoublant ? "c.oui" : "c.non")}</div>
       </div>
-      <table><thead><tr><th>${t("c.matiere")}</th>${periode.type === "evaluation" ? `<th class="num">${t("notes.note")}</th>` : ""}<th class="num">${t("bul.noteSur20")}</th><th class="num">${t("bul.coef")}</th><th class="num">${t("bul.points")}</th><th class="num">${t("bul.rang")}</th><th>${t("bul.appreciation")}</th><th>${t("bul.professeur")}</th></tr></thead><tbody>
-      ${b.groupes.map(g => g.lignes.map(l => `<tr><td>${esc(l.m.libelle)}</td>${periode.type === "evaluation" ? `<td class="num">${l.brute != null ? `${fmt(l.brute)}/${bareme(l.m.bareme).valeurMax}` : t("notes.nc")}</td>` : ""}<td class="num">${l.note != null ? fmt(l.note) : t("notes.nc")}</td><td class="num">${l.coef}</td><td class="num">${fmt(l.points)}</td><td class="num">${libelleRang(l.rang, e.genre)}</td><td>${esc(l.appreciation || "")}</td><td>${esc(l.m.prof)}</td></tr>`).join("")
-        + `<tr class="g"><td>${esc(g.g.libelle)}</td>${periode.type === "evaluation" ? "<td></td>" : ""}<td class="num">${fmt(g.moy)}</td><td class="num">${g.coefs}</td><td class="num">${fmt(g.points)}</td><td class="num">${libelleRang(g.rang, e.genre)}</td><td colspan="2">${esc(appreciation(g.moy) || "")}</td></tr>`).join("")}
+      <table><thead><tr><th>${t("c.matiere")}</th>${enteteColonnes}${periode.type === "evaluation" ? `<th class="num">${t("notes.note")}</th>` : ""}<th class="num">${t(periode.type === "trimestre" ? "bul.noteTrimestre" : periode.type === "annuel" ? "bul.noteAnnuelle" : "bul.noteSur20")}</th><th class="num">${t("bul.coef")}</th><th class="num">${t("bul.points")}</th><th class="num">${t("bul.rang")}</th><th>${t("bul.appreciation")}</th></tr></thead><tbody>
+      ${b.groupes.map(g => g.lignes.map(l => `<tr><td>${esc(l.m.libelle)}<div class="prof">${esc(l.m.prof)}</div></td>${colonnes.map(c => `<td class="num">${noteColonne(c, l)}</td>`).join("")}${periode.type === "evaluation" ? `<td class="num">${l.brute != null ? `${fmt(l.brute)}/${bareme(l.m.bareme).valeurMax}` : t("notes.nc")}</td>` : ""}<td class="num"><b>${l.note != null ? fmt(l.note) : t("notes.nc")}</b></td><td class="num">${l.coef}</td><td class="num">${fmt(l.points)}</td><td class="num">${libelleRang(l.rang, e.genre)}</td><td>${esc(l.appreciation || "")}</td></tr>`).join("")
+        + `<tr class="g"><td>${esc(g.g.libelle)}</td>${colonnes.map(() => "<td></td>").join("")}${periode.type === "evaluation" ? "<td></td>" : ""}<td class="num">${fmt(g.moy)}</td><td class="num">${g.coefs}</td><td class="num">${fmt(g.points)}</td><td class="num">${libelleRang(g.rang, e.genre)}</td><td>${esc(appreciation(g.moy) || "")}</td></tr>`).join("")}
       </tbody></table>
+      ${colonnes.length ? `<div class="legende">${colonnes.map(c => `<b>${esc(c.ev.code)}</b> : ${esc(c.ev.libelle)}${c.pct ? ` (${c.pct} %)` : ""}`).join(" · ")}${periode.type === "evaluation" ? ` → ${esc(evaluation(periode.id).libelle)}` : ` → ${t(periode.type === "annuel" ? "bul.noteAnnuelleLegende" : "bul.noteTrimestreLegende")}`}</div>` : ""}
       <div class="boxes">
         <div class="box"><h4>${t("bul.resultat")}</h4><div class="big">${fmt(b.moy)} / 20</div><div>${t("bul.rang")} : <b>${libelleRang(b.rang, e.genre)}</b> / ${res.stats.effectif}</div><div>${esc(b.appreciation || "")}</div>${b.distinction ? `<div class="honneur">★ ${t("bul.tableauHonneur")}</div>` : ""}${b.decisionFinale ? `<div style="margin-top:6px">${t("bul.decision")} : <b>${esc(b.decisionFinale)}</b></div>` : ""}</div>
         <div class="box"><h4>${t("bul.profilClasse")}</h4><div>${t("bul.moyenneClasse")} : <b>${fmt(res.stats.moyenne)}</b></div><div>${t("bul.moyPremier")} : <b>${fmt(res.stats.max)}</b></div><div>${t("bul.moyDernier")} : <b>${fmt(res.stats.min)}</b></div><div>${t("bul.ecartType")} : <b>${fmt(res.stats.ecart)}</b></div><div>${t("bul.tauxReussite")} : <b>${fmt(res.stats.taux)} %</b></div></div>
-        <div class="box"><h4>${t("bul.discipline")}</h4><div>${t("disc.nonJustifiees")} : <b>${b.discipline.nj} h</b></div><div>${t("disc.justifiees")} : <b>${b.discipline.j} h</b></div><div>${t("disc.total")} : <b>${b.discipline.total} h</b></div><div>${t("disc.decision")} : <b>${esc(b.discipline.decision || "—")}</b></div></div>
+        <div class="box"><h4>${t("bul.discipline")}</h4><div>${t("disc.total")} : <b>${b.discipline.total} h</b></div><div>${t("disc.nonJustifiees")} : <b>${b.discipline.nj} h</b></div><div>${t("disc.justifiees")} : <b>${b.discipline.j} h</b></div><div>${t("disc.decision")} : <b>${esc(b.discipline.decision || "—")}</b></div></div>
       </div>
-      <div style="display:flex;justify-content:space-between;margin-top:22px;color:#64748b"><span>${t("bul.signParent")}</span><span>${t("bul.signTitulaire")}</span><span>${t("bul.signDirecteur")}</span></div>
+      <div class="signatures" style="display:flex;justify-content:space-between;margin-top:22px;color:#64748b"><span>${t("bul.signParent")}</span><span>${t("bul.signTitulaire")}</span><span>${t("bul.signDirecteur")}</span></div>
       ${piedApplication()}
     </div>`;
     S.lang = langueInterface;
     dialog(t("bul.apercuDe", { e: `${e.nom} ${e.prenom}` }), papier, `<button class="btn secondary" data-act="fermer">${t("c.fermer")}</button><button class="btn" data-act="pdf-bulletins"><i class="pi pi-file-pdf"></i>${t("bul.genererPdfEleve")}</button>`, true);
+  }
+
+  /* ---------------- Reçu de règlement (imprimable, GET /reglement/recu/{id}) ---------------- */
+  // Numéro dérivé de l'id du règlement : REG-<année du règlement>-<id sur 6 chiffres>
+  const numeroRecuReglement = r => `REG-${r.date.slice(0, 4)}-${String(r.id).slice(-6).padStart(6, "0")}`;
+  function recuReglement(id) {
+    const r = D.reglements.find(x => x.id === Number(id)), e = eleve(r.eleve), tr = byId(D.tranches, r.tranche);
+    // Situation de la tranche au moment du règlement (règlements valides jusqu'à celui-ci inclus)
+    const cumul = D.reglements.filter(x => x.eleve === r.eleve && x.tranche === r.tranche && x.statut === "valide"
+      && (x.date < r.date || (x.date === r.date && x.id <= r.id))).reduce((s, x) => s + x.montant, 0);
+    const reste = Math.max(tr.montant - cumul, 0);
+    const u = D.utilisateurs.find(x => x.username === r.user) || utilisateurCourant();
+    const dateRecu = iso => iso.split("-").reverse().join("/");
+    const ligne = (cle, v, cls = "") => `<tr${cls ? ` class="${cls}"` : ""}><th style="width:42%">${bi(cle)}</th><td>${v}</td></tr>`;
+    const mention = { e: `${esc(e.nom)} ${esc(e.prenom || "")}`, c: esc(classe(e.classe).libelle), m: fcfa(r.montant), t: esc(tr.libelle), a: esc(D.ecole.annee) };
+    const exemplaire = cleExemplaire => `
+      <div class="recu">
+        ${enteteDocument(`<div style="text-align:right;flex:none"><h2>${bi("recuR.titre")}</h2><div style="font-weight:700" class="mono">N° ${numeroRecuReglement(r)}</div><div style="color:#64748b">${dateRecu(r.date)}</div>${r.statut === "annule" ? `<div class="duplicata">${tL("fr", "recuR.annule")} · ${tL("en", "recuR.annule")}</div>` : ""}</div>`, true)}
+        <table>
+          ${ligne("c.eleve", `<b>${esc(e.nom)} ${esc(e.prenom || "")}</b>`)}
+          ${ligne("c.matricule", `<span class="mono">${esc(e.matricule)}</span>`)}
+          ${ligne("c.classe", `<b>${esc(classe(e.classe).libelle)}</b>`)}
+          ${ligne("sco.tranche", esc(tr.libelle))}
+          ${ligne("recuR.montantTranche", fcfa(tr.montant))}
+          ${ligne("recuR.montantVerse", `<b>${fcfa(r.montant)}</b> · ${bi(r.type === "total" ? "pay.total" : "pay.partiel")}`, "montant")}
+          ${ligne("recuR.cumul", fcfa(cumul))}
+          ${ligne("recuR.reste", `<b>${fcfa(reste)}</b>`)}
+          ${ligne("recu.enregistrePar", `${esc(u.prenom)} ${esc(u.nom)} (${esc(u.username)})`)}
+        </table>
+        <p style="margin:10px 0 0">${bi("recuR.mention", mention)}</p>
+        <div style="display:flex;justify-content:space-between;margin-top:22px;color:#64748b"><span>${bi("recuR.signature")}</span><span style="text-align:right">${bi("recu.cachet")}</span></div>
+        ${piedApplication(true, `<span>${biLigne(cleExemplaire)}</span>`)}
+      </div>`;
+    dialog(t("recuR.titre"), `<div class="paper print-area">${exemplaire("recu.exemplaireEleve")}<div class="decoupe"><span>✂</span></div>${exemplaire("recu.exemplaireEcole")}</div>`,
+      `<button class="btn secondary" data-act="fermer">${t("c.fermer")}</button><button class="btn" data-act="imprimer"><i class="pi pi-print"></i>${t("recu.imprimer")}</button>`, true);
   }
 
   /* ---------------- Reçu d'inscription (imprimable) ---------------- */
@@ -1563,15 +1664,93 @@
   }
 
   /* ---------------- Scolarité ---------------- */
+  // Simule GET /reglement/historique?date_debut=&date_fin=&q=&page=&page_size= : année en cours, du plus récent au plus ancien
+  function ecranHistoriqueReglements(onglets) {
+    const H = S.hreg, f = H.applique;
+    const termes = normaliser(f.q.trim()).split(/\s+/).filter(Boolean);
+    const filtres = D.reglements
+      .filter(r => (!f.du || r.date >= f.du) && (!f.au || r.date <= f.au))
+      .filter(r => { const e = eleve(r.eleve); const texte = normaliser(`${e.nom} ${e.prenom || ""} ${e.matricule}`); return termes.every(x => texte.includes(x)); })
+      .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+    const totalPages = Math.max(1, Math.ceil(filtres.length / H.pageSize)), page = Math.min(Math.max(1, H.page), totalPages);
+    const lignes = filtres.slice((page - 1) * H.pageSize, page * H.pageSize);
+    const valides = filtres.filter(r => r.statut === "valide");
+    const filtreActif = f.du || f.au || f.q;
+    const carte = (icone, sev, l, v) => `<div class="card stat"><div class="stat-icon ${sev}"><i class="pi ${icone}"></i></div><div><div class="stat-label">${l}</div><div class="stat-value" style="font-size:20px">${v}</div></div></div>`;
+    return entete(t("sco.titre"), t("sco.sousTitre")) + onglets + `
+      <div class="card" style="margin-bottom:16px"><div class="card-body"><form class="filters" data-form="filtre-hreg">
+        <div class="field" style="width:170px"><label>${t("hist.du")}</label><input class="input" type="date" id="hreg-du" value="${esc(H.du)}"></div>
+        <div class="field" style="width:170px"><label>${t("hist.au")}</label><input class="input" type="date" id="hreg-au" value="${esc(H.au)}"></div>
+        <div class="field" style="width:300px"><label>${t("eleves.nomOuMatricule")}</label><div class="input-icon"><i class="pi pi-search"></i><input class="input" id="hreg-q" value="${esc(H.q)}" placeholder="${t("eleves.rechercherPh")}" autocomplete="off"></div></div>
+        <button class="btn" type="submit"><i class="pi pi-filter"></i>${t("c.filtrer")}</button>
+        ${filtreActif ? `<button class="btn text" type="button" data-act="effacer-hreg"><i class="pi pi-times"></i>${t("c.effacer")}</button>` : ""}
+        <div id="hreg-erreur" class="grow"></div>
+      </form></div></div>
+      <div class="grid grid-3" style="margin-bottom:16px">
+        ${carte("pi-wallet", "success", t("sco.totalEncaisse"), fcfa(valides.reduce((s, r) => s + r.montant, 0)))}
+        ${carte("pi-list", "", t("sco.nbReglementsValides"), valides.length)}
+        ${carte("pi-ban", "danger", t("sco.nbReglementsAnnules"), filtres.length - valides.length)}
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="small muted"><i class="pi pi-sort-amount-down"></i> ${t("hist.tri")} · ${t("c.anneeScolaire")} ${esc(D.ecole.annee)}</span><span class="tag info">${t("sco.histTotal", { n: filtres.length })}</span></div>
+        <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.date")}</th><th>${t("c.eleve")}</th><th>${t("c.classe")}</th><th>${t("sco.tranche")}</th><th>${t("sco.typeReglement")}</th><th class="num">${t("c.montant")}</th><th>${t("sco.enregistrePar")}</th><th>${t("c.statut")}</th><th></th></tr></thead><tbody>
+        ${lignes.length ? lignes.map(r => { const e = eleve(r.eleve);
+          return `<tr${r.statut === "valide" ? "" : ` class="muted"`}><td class="mono">${fmtDate(r.date)}</td>
+          <td><div class="person"><span class="avatar">${esc(initiales(e.prenom, e.nom))}</span><div>${esc(e.nom)} ${esc(e.prenom || "")}<div class="sub mono">${esc(e.matricule)}</div></div></div></td>
+          <td><b>${esc(classe(e.classe).libelle)}</b></td><td>${esc(byId(D.tranches, r.tranche).libelle)}</td>
+          <td>${tag(r.type === "total" ? "success" : "warn", t(r.type === "total" ? "pay.total" : "pay.partiel"))}</td>
+          <td class="num"><b>${fcfa(r.montant)}</b></td><td class="mono small">${esc(r.user)}</td>
+          <td>${r.statut === "valide" ? tag("success", t("sco.valide")) : tag("secondary", t("sco.annule"))}</td>
+          <td class="right" style="white-space:nowrap"><button class="btn text icon sm" data-act="recu-reglement" data-v="${r.id}" title="${t("sco.imprimerRecu")}"><i class="pi pi-print"></i></button>${r.statut === "valide" && can("reglement:annuler") ? `<button class="btn danger outlined sm" data-act="annuler-reglement-hist" data-v="${r.id}"><i class="pi pi-ban"></i>${t("sco.annuler")}</button>` : ""}</td></tr>`; }).join("")
+          : `<tr><td colspan="9"><div class="empty">${t("c.aucunResultat")}</div></td></tr>`}
+        </tbody></table></div>
+        ${paginateur({ page, totalPages, total: filtres.length }, H.pageSize, "page-hreg", "hreg.pageSize")}
+      </div>`;
+  }
+  // POST /tranche-pension/add?id_niveau= et PATCH /tranche-pension/update/{id}
+  function dialogTranche(id) {
+    const x = id ? byId(D.tranches, id) : { code: "", libelle: "", ordre: Math.max(0, ...D.tranches.filter(y => y.niveau === Number(S.f.trNiveau.v)).map(y => y.ordre)) + 1, montant: "", niveau: Number(S.f.trNiveau.v) };
+    const champ = (cle, label, valeur, type = "text", extra = "") => `<div class="field"><label for="tr-${cle}">${t(label)} *</label><input class="input" id="tr-${cle}" name="${cle}" type="${type}" value="${esc(valeur)}" required ${extra}></div>`;
+    dialog(id ? t("sco.modifierTranche", { t: x.libelle }) : t("sco.ajouterTranche"), `<form id="form-tranche" data-form="tranche" data-id="${id || ""}"><div class="stack"><div class="form-grid">
+        <div class="field"><label>${t("c.niveau")} *</label>${id ? `<div><b>${esc(byId(D.niveaux, x.niveau).libelle)}</b></div>` : `<select class="select" name="niveau">${D.niveaux.map(n => option(n.id, n.libelle, x.niveau)).join("")}</select>`}</div>
+        ${champ("ordre", "sco.ordre", x.ordre, "number", 'min="1" step="1"')}
+        ${champ("code", "c.code", x.code, "text", 'maxlength="10"')}${champ("libelle", "c.libelle", x.libelle, "text", 'maxlength="60"')}
+        ${champ("montant", "c.montant", x.montant, "number", 'min="1" step="any"')}
+      </div><div id="tr-erreur"></div></div></form>`,
+      `<button class="btn secondary" data-act="fermer">${t("c.annuler")}</button><button class="btn" type="submit" form="form-tranche"><i class="pi pi-check"></i>${t("c.enregistrer")}</button>`);
+  }
+  function enregistrerTranche(form) {
+    const id = Number(form.dataset.id) || null, d = Object.fromEntries(new FormData(form).entries());
+    const niveau = id ? byId(D.tranches, id).niveau : Number(d.niveau);
+    const v = { code: d.code.trim(), libelle: d.libelle.trim(), ordre: Number(d.ordre), montant: Number(d.montant) };
+    // Mêmes contrôles que le backend : code unique (DUPLICATION_CODE), numéro d'ordre unique par niveau (DUPLICATION_NUMERO_ORDRE), montant > 0
+    const erreur = !v.code || !v.libelle || !v.ordre ? t("sco.errTrancheChamps")
+      : !(v.montant > 0) ? t("sco.errTrancheMontant")
+      : D.tranches.some(x => x.id !== id && x.code.toLowerCase() === v.code.toLowerCase()) ? t("sco.errTrancheCode", { c: v.code })
+      : D.tranches.some(x => x.id !== id && x.niveau === niveau && x.ordre === v.ordre) ? t("sco.errTrancheOrdre", { o: v.ordre })
+      : null;
+    if (erreur) {
+      document.getElementById("tr-erreur").innerHTML = `<div class="message danger"><i class="pi pi-times-circle"></i><div class="small">${erreur}</div></div>`;
+      return;
+    }
+    if (id) Object.assign(byId(D.tranches, id), v);
+    else D.tranches.push({ id: Date.now(), niveau, ...v });
+    S.f.trNiveau.v = niveau;
+    fermer(); render();
+    toast("success", t(id ? "sco.trancheModifiee" : "sco.trancheAjoutee"), `${v.libelle} · ${fcfa(v.montant)}`);
+  }
   function ecranScolarite() {
     const tab = S.tab.scolarite;
-    const onglets = `<div class="tabs" style="margin-bottom:16px">${[["reglements", "sco.tReglements"], ["tranches", "sco.tTranches"]].map(([k, l]) => `<div class="tab ${tab === k ? "on" : ""}" data-tab="scolarite" data-v="${k}">${t(l)}</div>`).join("")}</div>`;
+    const onglets = `<div class="tabs" style="margin-bottom:16px">${[["reglements", "sco.tReglements"], ["historique", "sco.tHistorique"], ["tranches", "sco.tTranches"]].map(([k, l]) => `<div class="tab ${tab === k ? "on" : ""}" data-tab="scolarite" data-v="${k}">${t(l)}</div>`).join("")}</div>`;
+    if (tab === "historique") return ecranHistoriqueReglements(onglets);
     if (tab === "tranches") {
-      const total = D.tranches.reduce((s, x) => s + x.montant, 0);
-      return entete(t("sco.titre"), t("sco.sousTitre"), can("tranche_pension:ajouter") ? `<button class="btn"><i class="pi pi-plus"></i>${t("sco.ajouterTranche")}</button>` : "") + onglets + `
-        <div class="filters" style="margin-bottom:16px"><div class="field"><label>${t("c.niveau")}</label><select class="select">${D.niveaux.map(n => option(n.id, n.libelle, 5)).join("")}</select></div></div>
+      // GET /tranche-pension/by-niveau/{id_niveau}
+      const tranchesNiveau = D.tranches.filter(x => x.niveau === Number(S.f.trNiveau.v)).sort((a, b) => a.ordre - b.ordre);
+      const total = tranchesNiveau.reduce((s, x) => s + x.montant, 0);
+      return entete(t("sco.titre"), t("sco.sousTitre"), can("tranche_pension:ajouter") ? `<button class="btn" data-act="ajouter-tranche"><i class="pi pi-plus"></i>${t("sco.ajouterTranche")}</button>` : "") + onglets + `
+        <div class="filters" style="margin-bottom:16px"><div class="field"><label>${t("c.niveau")}</label><select class="select" data-f="trNiveau.v">${D.niveaux.map(n => option(n.id, n.libelle, S.f.trNiveau.v)).join("")}</select></div></div>
         <div class="card"><div class="table-wrap"><table class="dt"><thead><tr><th>${t("sco.ordre")}</th><th>${t("c.code")}</th><th>${t("c.libelle")}</th><th class="num">${t("c.montant")}</th><th></th></tr></thead><tbody>
-        ${D.tranches.map(x => `<tr><td>${x.ordre}</td><td class="mono">${esc(x.code)}</td><td>${esc(x.libelle)}</td><td class="num">${fcfa(x.montant)}</td><td class="right">${can("tranche_pension:modifier") ? `<button class="btn text icon sm"><i class="pi pi-pencil"></i></button>` : ""}</td></tr>`).join("")}
+        ${!tranchesNiveau.length ? `<tr><td colspan="5"><div class="empty">${t("sco.aucuneTranche")}</div></td></tr>` : ""}${tranchesNiveau.map(x => `<tr><td>${x.ordre}</td><td class="mono">${esc(x.code)}</td><td>${esc(x.libelle)}</td><td class="num">${fcfa(x.montant)}</td><td class="right">${can("tranche_pension:modifier") ? `<button class="btn text icon sm" data-act="modifier-tranche" data-v="${x.id}" title="${t("c.modifier")}"><i class="pi pi-pencil"></i></button>` : ""}</td></tr>`).join("")}
         <tr class="total"><td colspan="3">${t("sco.totalPension")}</td><td class="num">${fcfa(total)}</td><td></td></tr>
         </tbody></table></div></div>`;
     }
@@ -1622,7 +1801,7 @@
     const liste = reglementsEleve(e.id);
     dialog(t("sco.historiqueDe", { e: `${e.nom} ${e.prenom}` }), `<div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.date")}</th><th>${t("sco.tranche")}</th><th class="num">${t("c.montant")}</th><th>${t("sco.typeReglement")}</th><th>${t("c.statut")}</th><th></th></tr></thead><tbody>
       ${liste.length ? liste.map(r => `<tr><td>${fmtDate(r.date)}</td><td>${esc(byId(D.tranches, r.tranche).libelle)}</td><td class="num">${fcfa(r.montant)}</td><td>${t("pay." + r.type)}</td><td>${r.statut === "valide" ? tag("success", t("sco.valide")) : tag("secondary", t("sco.annule"))}</td>
-        <td class="right">${r.statut === "valide" && can("reglement:annuler") ? `<button class="btn danger outlined sm" data-act="annuler-reglement" data-v="${r.id}"><i class="pi pi-ban"></i>${t("sco.annuler")}</button>` : ""}</td></tr>`).join("")
+        <td class="right" style="white-space:nowrap"><button class="btn text icon sm" data-act="recu-reglement" data-v="${r.id}" title="${t("sco.imprimerRecu")}"><i class="pi pi-print"></i></button>${r.statut === "valide" && can("reglement:annuler") ? `<button class="btn danger outlined sm" data-act="annuler-reglement" data-v="${r.id}"><i class="pi pi-ban"></i>${t("sco.annuler")}</button>` : ""}</td></tr>`).join("")
         : `<tr><td colspan="6"><div class="empty">${t("sco.aucunReglement")}</div></td></tr>`}
     </tbody></table></div>`, `<button class="btn secondary" data-act="fermer">${t("c.fermer")}</button>`, true);
   }
@@ -1659,7 +1838,7 @@
     } else if (tab === "decisions") {
       corps = `<div class="message warn" style="margin-bottom:16px"><i class="pi pi-lock"></i><div class="small">${t("adm.decisionsBloquees")}</div></div>
         <div class="card"><div class="card-head"><h2>${t("adm.decisions")}</h2></div><div class="table-wrap"><table class="dt"><thead><tr><th>${t("disc.decision")}</th><th>${t("adm.libelleEn")}</th><th class="num">${t("adm.heuresMin")}</th><th class="num">${t("adm.heuresMax")}</th><th class="num">${t("adm.elevesConcernes")}</th></tr></thead><tbody>
-        ${D.decisions.map(d => `<tr><td>${esc(d.libelle)}</td><td>${d.libelleEn ? esc(d.libelleEn) : `<span class="muted">—</span>`}</td><td class="num">${d.min}</td><td class="num">${d.max === 999 ? "∞" : d.max}</td><td class="num">${D.eleves.filter(e => { const x = discipline(e.id, [1]); return x.total >= d.min && x.total <= d.max; }).length}</td></tr>`).join("")}
+        ${D.decisions.map(d => `<tr><td>${esc(d.libelle)}</td><td>${d.libelleEn ? esc(d.libelleEn) : `<span class="muted">—</span>`}</td><td class="num">${d.min}</td><td class="num">${d.max === 999 ? "∞" : d.max}</td><td class="num">${D.eleves.filter(e => { const x = discipline(e.id, [1]); return x.nj >= d.min && x.nj <= d.max; }).length}</td></tr>`).join("")}
         </tbody></table></div></div>`;
     } else if (tab === "annees") {
       corps = `<div class="grid grid-2"><div class="card"><div class="card-head"><h2>${t("adm.annees")}</h2>${can("annee:ajouter") ? `<button class="btn sm"><i class="pi pi-plus"></i>${t("c.ajouter")}</button>` : ""}</div><div class="table-wrap"><table class="dt"><tbody>
@@ -1762,7 +1941,7 @@
 
   function setFiltre(chemin, valeur) {
     const [a, b] = chemin.split(".");
-    const cible = a === "insc" ? S.insc : a === "hist" ? S.hist : a === "ens" ? S.ens : a === "sal" ? S.sal : a === "vers" ? S.vers : a === "mp" ? S.mp : S.f[a];
+    const cible = a === "insc" ? S.insc : a === "hist" ? S.hist : a === "ens" ? S.ens : a === "sal" ? S.sal : a === "vers" ? S.vers : a === "mp" ? S.mp : a === "hreg" ? S.hreg : S.f[a];
     cible[b] = isNaN(valeur) || valeur === "" ? valeur : Number(valeur);
   }
 
@@ -1814,6 +1993,14 @@
       recuInscription({ ...e, classe: classe(ins.classe).libelle, montant: montantInscription(ins.classe), type: ins.type, redoublant: ins.redoublant, numero: ins.numero, date: ins.date, user: ins.user, duplicata: true });
     },
     "page-hist": v => { S.hist.page = Number(v); render(); },
+    "page-hreg": v => { S.hreg.page = Number(v); render(); },
+    "effacer-hreg": () => { Object.assign(S.hreg, { du: "", au: "", q: "", applique: { du: "", au: "", q: "" }, page: 1 }); render(); },
+    "annuler-reglement-hist": v => {
+      const r = D.reglements.find(x => x.id === Number(v));
+      r.statut = "annule";
+      render();
+      toast("warn", t("sco.annuleOk"), `${eleve(r.eleve).nom} · ${fcfa(r.montant)}`);
+    },
     "effacer-hist": () => { Object.assign(S.hist, { du: "", au: "", q: "", applique: { du: "", au: "", q: "" }, page: 1 }); render(); },
     "modifier-insc": v => { const ins = byId(D.inscriptions, v); S.editInsc = { id: ins.id, niveau: classe(ins.classe).niveau, classe: ins.classe, redoublant: ins.redoublant }; dialogModifierInscription(); },
     "enregistrer-insc": () => enregistrerModificationInscription(),
@@ -1863,10 +2050,15 @@
     "nouveau-reglement": v => dialogNouveauReglement(v),
     "valider-reglement": v => {
       const s = situationTranche(Number(v), S.f.regl.tranche);
-      D.reglements.push({ id: Date.now(), eleve: Number(v), tranche: S.f.regl.tranche, montant: s.reste, type: s.regle ? "partiel" : "total", statut: "valide", date: AUJOURDHUI, user: utilisateurCourant().username });
+      const nouveau = { id: Date.now(), eleve: Number(v), tranche: S.f.regl.tranche, montant: s.reste, type: s.regle ? "partiel" : "total", statut: "valide", date: AUJOURDHUI, user: utilisateurCourant().username };
+      D.reglements.push(nouveau);
       fermer(); render(); toast("success", t("sco.reglementOk"), fcfa(s.reste));
+      recuReglement(nouveau.id); // reçu à imprimer après l'enregistrement
     },
     historique: v => dialogHistorique(v),
+    "recu-reglement": v => recuReglement(v),
+    "ajouter-tranche": () => dialogTranche(),
+    "modifier-tranche": v => dialogTranche(Number(v)),
     "annuler-reglement": v => { const r = D.reglements.find(x => x.id === Number(v)); r.statut = "annule"; dialogHistorique(r.eleve); render(); dialogHistorique(r.eleve); toast("warn", t("sco.annuleOk"), fcfa(r.montant)); },
     "bareme-sel": v => { S.f.baremeSel = Number(v); render(); },
     "toggle-appel": () => { D.configuration.isAppel = !D.configuration.isAppel; toast("success", t("adm.configOk"), t(D.configuration.isAppel ? "adm.appelActive" : "adm.appelDesactive")); },
@@ -1923,7 +2115,8 @@
       S.nc = { classe: S.sel.classe || "", matiere: v || "", enseignant: profs.length === 1 ? String(profs[0].id) : "", jour: 0, debut: "08:00", fin: "10:00" };
       dialogCours();
     },
-    "ajouter-evaluation": () => dialogSimple("eval.ajouter", ["c.code", "c.libelle"], null, true),
+    "ajouter-evaluation": () => dialogEvaluation(),
+    "modifier-evaluation": v => dialogEvaluation(Number(v)),
     "ajouter-utilisateur": () => dialogSimple("usr.ajouter", ["usr.identifiant", "c.nom", "c.prenom", "login.motDePasse"]),
     "confirmer-ok": () => { const cb = S.confirmCb; fermer(); if (cb) cb(); else toast("success", t("c.succes"), t("demo.actionSimulee")); },
   };
@@ -2027,6 +2220,7 @@
       setFiltre(el.dataset.f, el.value);
       if (el.dataset.f === "eleves.genre" || el.dataset.f === "eleves.pageSize") S.f.eleves.page = 1;
       if (el.dataset.f === "hist.pageSize") S.hist.page = 1;
+      if (el.dataset.f === "hreg.pageSize") S.hreg.page = 1;
       if (el.dataset.f === "ens.pageSize") S.ens.page = 1;
       if (el.dataset.f === "sal.pageSize") S.sal.page = 1;
       if (el.dataset.f === "vers.pageSize") S.vers.page = 1;
@@ -2083,6 +2277,14 @@
     const form = ev.target.closest("[data-form]");
     if (!form) return;
     ev.preventDefault();
+    if (form.dataset.form === "tranche") { enregistrerTranche(form); return; }
+    if (form.dataset.form === "filtre-hreg") {
+      const du = document.getElementById("hreg-du").value, au = document.getElementById("hreg-au").value, q = document.getElementById("hreg-q").value;
+      if (du && au && du > au) { document.getElementById("hreg-erreur").innerHTML = `<div class="message danger small"><i class="pi pi-times-circle"></i>${t("hist.errDates")}</div>`; return; }
+      Object.assign(S.hreg, { du, au, q, applique: { du, au, q }, page: 1 });
+      render();
+      return;
+    }
     if (form.dataset.form === "filtre-hist") {
       const du = document.getElementById("hist-du").value, au = document.getElementById("hist-au").value, q = document.getElementById("hist-q").value;
       if (du && au && du > au) { document.getElementById("hist-erreur").innerHTML = `<div class="message danger small"><i class="pi pi-times-circle"></i>${t("hist.errDates")}</div>`; return; }
@@ -2099,6 +2301,7 @@
       return;
     }
     if (form.dataset.form === "cours") { enregistrerCours(); return; }
+    if (form.dataset.form === "evaluation") { enregistrerEvaluation(form); return; }
     if (form.dataset.form === "filtre-pe") {
       const date = document.getElementById("pe-date").value, q = document.getElementById("pe-q").value;
       if (!date || date > AUJOURDHUI) return;

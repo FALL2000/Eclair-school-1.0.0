@@ -10,7 +10,7 @@ class TranchePensionBase(SQLModel):
         max_length=60, description="Libelle de la tranche de pension", nullable=False)
     numero_ordre: int = Field(
         description="rang de la tranche(1ere, 2e etc..)", nullable=False)
-    montant: float = Field(description="Montant de la tranche", nullable=False)
+    montant: float = Field(gt=0, description="Montant de la tranche", nullable=False)
 
 
 class TranchePensionCreateDTO(TranchePensionBase):
@@ -25,7 +25,7 @@ class TranchePensionUpdateDTO(SQLModel):
     code: Optional[str] = None
     libelle: Optional[str] = None
     numero_ordre: Optional[int] = None
-    montant: Optional[float] = None
+    montant: Optional[float] = Field(default=None, gt=0)
 
 
 class TranchePensionBulkUpdateItemDTO(SQLModel):
@@ -33,7 +33,7 @@ class TranchePensionBulkUpdateItemDTO(SQLModel):
     code: Optional[str] = None
     libelle: Optional[str] = None
     numero_ordre: Optional[int] = None
-    montant: Optional[float] = None
+    montant: Optional[float] = Field(default=None, gt=0)
 
 
 class TranchePensionBulkUpdateDTO(SQLModel):

@@ -273,14 +273,16 @@ class BulletinService:
             libelle = f"{rang}e"
         return f"{libelle} ex" if ex_aequo else libelle
 
-    def _get_decision_discipline(self, nb_heure_total: int, decisions: list, langue: Langue = Langue.FR) -> str | None:
+    def _get_decision_discipline(self, nb_heure_non_justifie: int, decisions: list, langue: Langue = Langue.FR) -> str | None:
+        """Décision dont l'intervalle contient le nombre d'heures d'absence non justifiées"""
         for decision in decisions:
-            if decision.nb_heure_min <= nb_heure_total <= decision.nb_heure_max:
+            if decision.nb_heure_min <= nb_heure_non_justifie <= decision.nb_heure_max:
                 return libelle_selon_langue(decision, langue)
         return None
 
     def _get_discipline(self, ctx: dict, id_eleve: int, evaluations: list[Evaluation]) -> dict:
-        """Cumul des heures d'absence de l'élève sur les évaluations (dépendances déjà exclues)"""
+        """Cumul des heures d'absence de l'élève sur les évaluations (dépendances déjà exclues) ;
+        la décision disciplinaire porte sur les heures NON justifiées (nb_heure_obtenu)"""
         enregistrements = [
             d for d in (ctx["disciplines"].get((e.id, id_eleve)) for e in evaluations) if d is not None
         ]
@@ -291,7 +293,7 @@ class BulletinService:
             "nb_heure_obtenu": obtenu,
             "nb_heure_justifie": justifie,
             "nb_heure_total": total,
-            "decision": self._get_decision_discipline(total, ctx["decisions"], ctx["langue"]) if enregistrements else None,
+            "decision": self._get_decision_discipline(obtenu, ctx["decisions"], ctx["langue"]) if enregistrements else None,
         }
 
     # ------------------------------------------------------------------
@@ -315,6 +317,7 @@ class BulletinService:
         complements : champs supplémentaires par élève (bulletin annuel)"""
         seuil = entete["seuil_reussite"]
         appreciations_ref = ctx["appreciations_reference"]
+        ids_colonnes = [c["id_evaluation"] for c in entete.get("evaluations", [])]
         toutes_matieres = list(ctx["matieres"].values())
         bulletins = {}
 
@@ -327,7 +330,16 @@ class BulletinService:
                 for matiere in groupe["matieres"]:
                     note_sur_20 = notes_eleve.get(matiere["id"])
                     notation = (notations or {}).get(eleve.id, {}).get(matiere["id"])
+                    notes_colonnes = []
+                    for id_ev in ids_colonnes:
+                        n = ctx["notes"].get((id_ev, eleve.id, matiere["id"]))
+                        notes_colonnes.append({
+                            "id_evaluation": id_ev,
+                            "note": n.note if n is not None else None,
+                            "note_sur_20": self._ramener_sur_20(n.note, matiere["bareme"]) if n is not None else None,
+                        })
                     lignes.append({
+                        "notes_evaluations": notes_colonnes,
                         "id_matiere_evalue": matiere["id"],
                         "code": matiere["code"],
                         "libelle": matiere["libelle"],
@@ -480,6 +492,7 @@ class BulletinService:
                 "total_heures_justifiees": justifiees,
                 "total_heures_non_justifiees": non_justifiees,
                 "moyenne_heures_par_eleve": arrondir(total / len(liste)) if liste else None,
+                "moyenne_heures_non_justifiees_par_eleve": arrondir(non_justifiees / len(liste)) if liste else None,
                 "decisions": self._effectifs_par_libelle([b["discipline"]["decision"] for b in liste]),
             },
             "decisions_fin_annee": (
@@ -502,7 +515,21 @@ class BulletinService:
                 })
         return resultat
 
-    def _entete(self, ctx: dict, type_bulletin: str, periode: str | None, seuil: float) -> dict:
+    @staticmethod
+    def _colonne(evaluation: Evaluation, pourcentage: float | None = None) -> dict:
+        return {"id_evaluation": evaluation.id, "code": evaluation.code, "libelle": evaluation.libelle, "pourcentage": pourcentage}
+
+    def _colonnes_dependances(self, evaluation: Evaluation) -> list[dict]:
+        """Dépendances d'une évaluation calculée (ex : Devoir 40 % + Composition 60 %), par date de début"""
+        colonnes = []
+        for lien in self.depends_evaluation_repository.findBy(id_evaluation=evaluation.id):
+            dependance = self.evaluation_repository.findOne(lien.id_dependance)
+            if dependance is not None:
+                colonnes.append((dependance.date_deb, self._colonne(dependance, lien.pourcentage)))
+        return [c for _, c in sorted(colonnes, key=lambda x: x[0])]
+
+    def _entete(self, ctx: dict, type_bulletin: str, periode: str | None, seuil: float,
+                evaluations: list[dict] | None = None) -> dict:
         return {
             "type_bulletin": type_bulletin,
             "type_school": get_settings().type_school,
@@ -513,6 +540,7 @@ class BulletinService:
             "seuil_reussite": seuil,
             "date_generation": date.today(),
             "langue": ctx["langue"].value,
+            "evaluations": evaluations or [],
         }
 
     def _filtrer_eleve(self, resultat: dict, id_eleve: int | None) -> dict:
@@ -546,7 +574,8 @@ class BulletinService:
             }
             resultat = self._construire_bulletins(
                 ctx, notes_sur_20, disciplines,
-                self._entete(ctx, "evaluation", evaluation.libelle, SEUIL_REUSSITE),
+                self._entete(ctx, "evaluation", evaluation.libelle, SEUIL_REUSSITE,
+                             self._colonnes_dependances(evaluation)),
                 avec_distinction=False,
                 notations=notations,
             )
@@ -581,7 +610,8 @@ class BulletinService:
             }
             resultat = self._construire_bulletins(
                 ctx, notes_sur_20, disciplines,
-                self._entete(ctx, "trimestre", trimestre.libelle, SEUIL_REUSSITE),
+                self._entete(ctx, "trimestre", trimestre.libelle, SEUIL_REUSSITE,
+                             [self._colonne(e) for e in evaluations]),
                 avec_distinction=True,
             )
             return self._filtrer_eleve(resultat, id_eleve)
@@ -671,7 +701,8 @@ class BulletinService:
 
             resultat = self._construire_bulletins(
                 ctx, notes_annuelles, disciplines,
-                self._entete(ctx, "annuel", None, data.seuil_reussite),
+                self._entete(ctx, "annuel", None, data.seuil_reussite,
+                             [self._colonne(e) for e in toutes_evaluations]),
                 avec_distinction=True,
                 moyennes_imposees=moyennes_annuelles,
                 complements=complements,

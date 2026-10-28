@@ -4,7 +4,7 @@ from sqlmodel import Field, SQLModel
 class DisciplineEleveBase(SQLModel):
     nb_heure_obtenu: int = Field(
         ge=0,
-        description="Nombre d'heures d'absence obtenues",
+        description="Nombre d'heures d'absence obtenues(non justifiées)",
         nullable=False,
     )
     nb_heure_justifie: int = Field(
