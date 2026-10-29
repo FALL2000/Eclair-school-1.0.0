@@ -280,6 +280,10 @@ h3 { font-size: 15px; }
 
 /* Bouton segmenté (p-selectbutton) */
 .segmented { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--radius); overflow: hidden; }
+/* Saisie enregistrée (lecture seule) : boutons non cochables, la valeur choisie reste lisible */
+.segmented button:disabled { cursor: not-allowed; color: var(--text-muted); background: var(--surface-alt); }
+.segmented button.on:disabled { background: var(--p-primary-200); color: var(--p-primary-800); }
+.input:disabled { background: var(--surface-alt); color: var(--text); cursor: not-allowed; }
 .segmented button { border: 0; background: var(--surface); color: var(--text-soft); font: inherit; font-weight: 600; padding: 0 12px; height: 34px; cursor: pointer; }
 .segmented button + button { border-left: 1px solid var(--border-strong); }
 .segmented button.on { background: var(--primary); color: var(--primary-contrast); }
@@ -521,3 +525,6 @@ table.dt { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .filters .field { width: 100%; }
   .paper .boxes { grid-template-columns: 1fr; }
 }
+/* Export PDF de la liste des élèves (A4) */
+.paper.liste-eleves { font-size: 11.5px; }
+.paper.liste-eleves th, .paper.liste-eleves td { padding: 4px 6px; }

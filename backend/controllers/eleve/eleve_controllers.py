@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
 from common.dependencies import get_db, require_permission
+from common.enumeration import FiltreInscription
 from common.permissions import Action, Module
 from repositories.administration.annee_repository import AnneeRepository
 from repositories.administration.classe_repository import ClasseRepository
@@ -85,7 +86,7 @@ def search_eleves(
 
 @router.get(
     "/by-classe/{id_classe}",
-    summary="Recuperer les eleves inscrits dans une classe pour l'annee en cours (pagines)",
+    summary="Recuperer les eleves d'une classe pour l'annee en cours (pagines ; sans page ni page_size : toute la liste, pour l'export)",
     status_code=200,
     response_model=PaginatedEleveClasse,
 )
@@ -97,5 +98,6 @@ def get_eleves_by_classe(
     page_size: Annotated[int | None, Query(ge=1, le=200, description="Nombre d'elements par page")] = None,
     q: Annotated[str | None, Query(max_length=100, description="Filtre sur le nom, le prenom ou le matricule")] = None,
     genre: Annotated[str | None, Query(pattern="^[MF]$", description="Filtre sur le genre (M ou F)")] = None,
+    statut: Annotated[FiltreInscription, Query(description="tous, inscrit (inscription finalisee) ou non_inscrit")] = FiltreInscription.TOUS,
 ):
-    return eleve_service.get_eleves_by_classe(id_classe, page, page_size, q, genre)
+    return eleve_service.get_eleves_by_classe(id_classe, page, page_size, q, genre, statut)

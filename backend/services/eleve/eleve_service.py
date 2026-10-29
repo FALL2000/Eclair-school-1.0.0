@@ -1,5 +1,7 @@
 from fastapi import HTTPException
 
+from common.enumeration import FiltreInscription
+
 from models.eleve.eleve import Eleve
 from repositories.administration.annee_repository import AnneeRepository
 from repositories.administration.classe_repository import ClasseRepository
@@ -108,10 +110,12 @@ class EleveService:
 
     def get_eleves_by_classe(
         self, id_classe: int, page: int | None, page_size: int | None,
-        q: str | None = None, genre: str | None = None,
+        q: str | None = None, genre: str | None = None, statut: FiltreInscription = FiltreInscription.TOUS,
     ) -> PaginatedEleveClasse:
-        """Élèves inscrits dans une classe pour l'année en cours, paginés et triés par nom.
-        Filtres optionnels : q (nom, prénom ou matricule) et genre."""
+        """Élèves d'une classe pour l'année en cours, paginés et triés par nom.
+        Filtres optionnels : q (nom, prénom ou matricule), genre et statut d'inscription
+        (inscrit = inscription finalisée, non_inscrit = élève placé dans la classe mais inscription non finalisée).
+        Sans page ni page_size, toute la liste est renvoyée (utilisé pour l'export PDF)."""
         try:
             annee = self._get_annee_service().get_annee_scolaire()[0]
             if self.classe_repository.findOne(id_classe) is None:
@@ -120,14 +124,16 @@ class EleveService:
                     detail={"error_code": "CLASSE_NOT_FOUND", "message": "Classe non trouvee"},
                 )
             termes = self._termes(q)
-            total_items = self.eleve_repository.count_by_classe(id_classe, annee.id, termes, genre)
+            is_inscris = {FiltreInscription.INSCRIT: True, FiltreInscription.NON_INSCRIT: False}.get(statut)
+            total_items = self.eleve_repository.count_by_classe(id_classe, annee.id, termes, genre, is_inscris)
             if page_size is None or page is None:
                 page_size = total_items if total_items > 0 else 1
                 page = 1
             total_pages = max(1, (total_items + page_size - 1) // page_size)
             page = min(max(page, 1), total_pages)
             lignes = self.eleve_repository.find_by_classe(
-                id_classe, annee.id, termes, genre, offset=(page - 1) * page_size, limit=page_size)
+                id_classe, annee.id, termes, genre, offset=(page - 1) * page_size, limit=page_size,
+                is_inscris=is_inscris)
             return PaginatedEleveClasse(
                 page=page,
                 page_size=page_size,
@@ -137,6 +143,7 @@ class EleveService:
                     {
                         **eleve.model_dump(),
                         "id_inscription": inscription.id,
+                        "is_inscris": inscription.is_inscris,
                         "is_redoublant": inscription.is_redoublant,
                         "is_nouveau": inscription.is_nouveau,
                         "date_inscris": inscription.date_inscris,

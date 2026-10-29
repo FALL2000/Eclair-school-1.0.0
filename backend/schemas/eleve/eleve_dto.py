@@ -81,8 +81,9 @@ class EleveRechercheResponseDTO(SQLModel):
 
 
 class EleveClasseResponseDTO(EleveResponseDTO):
-    """Élève inscrit dans une classe pour l'année en cours"""
+    """Élève d'une classe pour l'année en cours"""
     id_inscription: int
+    is_inscris: bool = Field(description="True : inscription finalisée ; False : placé dans la classe, inscription non finalisée")
     is_redoublant: bool
     is_nouveau: bool
     date_inscris: Optional[date] = None

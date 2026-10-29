@@ -2,7 +2,7 @@ from datetime import date
 
 from fastapi import HTTPException
 
-from common.enumeration import StatutPaiementTranche, StatutReglement
+from common.enumeration import FiltrePaiementTranche, StatutPaiementTranche, StatutReglement, TypeReglement
 from models.inscription.inscription import Inscription
 from models.scolarite.reglement import Reglement
 from repositories.administration.annee_repository import AnneeRepository
@@ -50,10 +50,52 @@ class ReglementService:
                 },
             )
 
+    def _check_montant(self, id_eleve: int, id_tranche_pension: int, id_annee: int, montant: float, type_reglement,
+                       exclude_id: int | None = None):
+        """Contrôles d'un règlement : élève inscrit cette année, tranche de son niveau, tranche pas encore soldée,
+        montant au plus égal au reste ; total = solde exactement le reste, partiel = montant inférieur au reste"""
+        id_niveau = self.reglement_repository.niveau_eleve_annee(id_eleve, id_annee)
+        if id_niveau is None:
+            raise HTTPException(
+                status_code=400,
+                detail={"error_code": "ELEVE_NON_INSCRIT", "message": "L'élève n'est pas inscrit pour l'année en cours"},
+            )
+        tranche = self.tranche_pension_repository.findOne(id_tranche_pension, load_relations=False)
+        if tranche is None:
+            raise HTTPException(
+                status_code=404,
+                detail={"error_code": "TRANCHE_PENSION_NOT_FOUND", "message": "Tranche de pension non trouvée"},
+            )
+        if tranche.id_niveau != id_niveau:
+            raise HTTPException(
+                status_code=400,
+                detail={"error_code": "TRANCHE_NIVEAU_DIFFERENT", "message": "Cette tranche n'appartient pas au niveau de l'élève"},
+            )
+        reste = round(tranche.montant - self.reglement_repository.total_regle(id_eleve, id_tranche_pension, id_annee, exclude_id), 2)
+        if reste <= 0:
+            raise HTTPException(
+                status_code=409,
+                detail={"error_code": "TRANCHE_DEJA_REGLEE", "message": "Cette tranche est déjà entièrement réglée"},
+            )
+        if montant > reste:
+            raise HTTPException(
+                status_code=400,
+                detail={"error_code": "MONTANT_SUPERIEUR_AU_RESTE", "message": f"Le montant dépasse le reste à payer ({reste:g} FCFA)"},
+            )
+        type_attendu = TypeReglement.TOTAL if montant == reste else TypeReglement.PARTIEL
+        if type_reglement is not None and TypeReglement(type_reglement) != type_attendu:
+            raise HTTPException(
+                status_code=400,
+                detail={"error_code": "TYPE_REGLEMENT_INCOHERENT",
+                        "message": f"Un règlement total doit solder le reste ({reste:g} FCFA) ; un règlement partiel doit être inférieur au reste"},
+            )
+        return type_attendu
+
     def add_reglement(self, reglement_in: ReglementCreateDTO, id_eleve: int, id_tranche_pension: int, current_user: dict):
-        """Enregistre un règlement pour l'année scolaire en cours"""
+        """Enregistre un règlement total ou partiel pour l'année scolaire en cours"""
         try:
             annee = self._get_annee_service().get_annee_scolaire()[0]
+            self._check_montant(id_eleve, id_tranche_pension, annee.id, reglement_in.montant, reglement_in.type)
             reglement_dict = reglement_in.model_dump()
             reglement_dict["id_eleve"] = id_eleve
             reglement_dict["id_tranche_pension"] = id_tranche_pension
@@ -78,6 +120,12 @@ class ReglementService:
             db_reglement = self.reglement_repository.findOne(reglement_id, load_relations=True)
             self._check_reglement_exists(db_reglement)
             update_data = reglement_update.model_dump(exclude_unset=True)
+            if ("montant" in update_data or "type" in update_data) and db_reglement.statut == StatutReglement.VALIDE:
+                # Mêmes contrôles qu'à l'ajout, sans compter le règlement modifié dans le total déjà réglé
+                self._check_montant(
+                    db_reglement.id_eleve, db_reglement.id_tranche_pension, db_reglement.id_annee,
+                    update_data.get("montant", db_reglement.montant), update_data.get("type", db_reglement.type),
+                    exclude_id=db_reglement.id)
             for key, value in update_data.items():
                 setattr(db_reglement, key, value)
             updated = self.reglement_repository.save(db_reglement)
@@ -214,11 +262,18 @@ class ReglementService:
         self,
         id_classe: int,
         id_tranche_pension: int,
-        statut_paiement: StatutPaiementTranche | None = None,
+        statut_paiement: FiltrePaiementTranche | None = None,
     ) -> list[dict]:
         """Récupère, pour l'année en cours, la situation de paiement d'une tranche de pension
         de chaque élève inscrit dans une classe (totalement réglée, partiellement réglée ou rien réglé),
-        éventuellement filtrée par statut de paiement"""
+        triée par nom puis prénom, éventuellement filtrée par statut de paiement
+        (non_solde = partiel et aucun ensemble). Sert aussi à l'export PDF généré dans Angular."""
+        if statut_paiement is None:
+            statuts_retenus = None
+        elif statut_paiement == FiltrePaiementTranche.NON_SOLDE:
+            statuts_retenus = {StatutPaiementTranche.PARTIEL, StatutPaiementTranche.AUCUN}
+        else:
+            statuts_retenus = {StatutPaiementTranche(statut_paiement.value)}
         try:
             annee = self._get_annee_service().get_annee_scolaire()[0]
             classe = self._get_classe(id_classe)
@@ -259,7 +314,7 @@ class ReglementService:
                     statut = StatutPaiementTranche.TOTAL
                 else:
                     statut = StatutPaiementTranche.PARTIEL
-                if statut_paiement is not None and statut != statut_paiement:
+                if statuts_retenus is not None and statut not in statuts_retenus:
                     continue
                 resultats.append({
                     "eleve": inscription.eleve,
@@ -270,6 +325,7 @@ class ReglementService:
                     "statut_paiement": statut,
                     "reglements": reglements,
                 })
+            resultats.sort(key=lambda x: ((x["eleve"].nom or "").lower(), (x["eleve"].prenom or "").lower()))
             return resultats
         except HTTPException as http_exec:
             raise http_exec
@@ -280,10 +336,10 @@ class ReglementService:
 
     def get_historique(
         self, date_debut: date | None, date_fin: date | None, q: str | None,
-        page: int | None, page_size: int | None,
+        page: int | None, page_size: int | None, statut: StatutReglement | None = None,
     ) -> PaginatedHistoriqueReglement:
         """Historique des règlements de l'année scolaire en cours, du plus récent au plus ancien, paginé.
-        Filtres optionnels : intervalle de dates de règlement et nom, prénom ou matricule de l'élève."""
+        Filtres optionnels : intervalle de dates de règlement, nom, prénom ou matricule de l'élève, statut (valide, annule)."""
         try:
             if date_debut and date_fin and date_debut > date_fin:
                 raise HTTPException(
@@ -295,14 +351,14 @@ class ReglementService:
                 )
             annee = self._get_annee_service().get_annee_scolaire()[0]
             termes = [terme for terme in (q or "").split() if terme]
-            total_items, total_valide = self.reglement_repository.count_historique(annee.id, date_debut, date_fin, termes)
+            total_items, total_valide = self.reglement_repository.count_historique(annee.id, date_debut, date_fin, termes, statut)
             if page_size is None or page is None:
                 page_size = total_items if total_items > 0 else 1
                 page = 1
             total_pages = max(1, (total_items + page_size - 1) // page_size)
             page = min(max(page, 1), total_pages)
             lignes = self.reglement_repository.find_historique(
-                annee.id, date_debut, date_fin, termes, offset=(page - 1) * page_size, limit=page_size)
+                annee.id, date_debut, date_fin, termes, offset=(page - 1) * page_size, limit=page_size, statut=statut)
             return PaginatedHistoriqueReglement(
                 total_valide=round(total_valide, 2),
                 page=page,

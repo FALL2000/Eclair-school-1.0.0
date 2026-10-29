@@ -17,6 +17,14 @@ class StatutPaiementTranche(str, Enum):
     AUCUN = "aucun"
 
 
+class FiltrePaiementTranche(str, Enum):
+    """Filtre de la situation d'une tranche : un statut, ou non_solde = partiel et aucun ensemble"""
+    TOTAL = "total"
+    PARTIEL = "partiel"
+    AUCUN = "aucun"
+    NON_SOLDE = "non_solde"
+
+
 class MoyenPaiement(str, Enum):
     """Moyen de paiement du salaire d'un enseignant"""
     ESPECE = "ESPECE"
@@ -26,6 +34,13 @@ class MoyenPaiement(str, Enum):
 
 # Moyens de paiement pour lesquels le numero de compte est obligatoire
 MOYENS_PAIEMENT_AVEC_COMPTE = (MoyenPaiement.COMPTE_BANCAIRE, MoyenPaiement.MOBILE)
+
+
+class FiltreInscription(str, Enum):
+    """Filtre de la liste des élèves d'une classe : tous, inscription finalisée ou non"""
+    TOUS = "tous"
+    INSCRIT = "inscrit"
+    NON_INSCRIT = "non_inscrit"
 
 
 class Langue(str, Enum):

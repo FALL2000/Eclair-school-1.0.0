@@ -6,7 +6,7 @@ from sqlmodel import Session
 
 from common.dependencies import get_db, require_permission, require_super_admin
 from common.permissions import Action, Module
-from common.enumeration import StatutPaiementTranche
+from common.enumeration import FiltrePaiementTranche, StatutReglement
 from repositories.administration.annee_repository import AnneeRepository
 from repositories.administration.classe_repository import ClasseRepository
 from repositories.scolarite.reglement_repository import ReglementRepository
@@ -118,10 +118,11 @@ def get_historique_reglements(
     date_debut: Annotated[date | None, Query(description="Date de règlement minimale (incluse)")] = None,
     date_fin: Annotated[date | None, Query(description="Date de règlement maximale (incluse)")] = None,
     q: Annotated[str | None, Query(max_length=100, description="Nom, prénom ou matricule de l'élève")] = None,
+    statut: Annotated[StatutReglement | None, Query(description="valide ou annule (vide : tous)")] = None,
     page: Annotated[int | None, Query(ge=1, description="Page actuelle")] = None,
     page_size: Annotated[int | None, Query(ge=1, le=200, description="Nombre d'éléments par page")] = None,
 ):
-    return reglement_service.get_historique(date_debut, date_fin, q, page, page_size)
+    return reglement_service.get_historique(date_debut, date_fin, q, page, page_size, statut)
 
 
 @router.get(
@@ -164,7 +165,8 @@ def get_reglements_by_classe_tranche(
     id_tranche_pension: int,
     reglement_service: Annotated[ReglementService, Depends(get_reglement_service)],
     _: Annotated[dict[str, Any], Depends(require_permission(Module.REGLEMENT, Action.CONSULTER))],
-    statut_paiement: Annotated[StatutPaiementTranche | None, Query(
-        description="Filtrer les élèves : total (tranche totalement réglée), partiel (partiellement réglée), aucun (rien réglé)")] = None,
+    statut_paiement: Annotated[FiltrePaiementTranche | None, Query(
+        description="Filtrer les élèves : total (tranche totalement réglée), partiel (partiellement réglée), aucun (rien réglé), "
+                    "non_solde (partiel et aucun ensemble)")] = None,
 ):
     return reglement_service.get_reglements_by_classe_tranche(id_classe, id_tranche_pension, statut_paiement)

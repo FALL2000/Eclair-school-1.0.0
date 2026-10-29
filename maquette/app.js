@@ -29,7 +29,7 @@
     tab: { admin: "structure", eleve: "infos", scolarite: "reglements", users: "users", insc: "nouvelle", sal: "etat" },
     calcule: { 2: true }, // la Séquence 2 (évaluation parente) a déjà été calculée
     f: {
-      eleves: { q: "", qApplique: "", genre: "", page: 1, pageSize: 10 },
+      eleves: { q: "", qApplique: "", genre: "", statut: "", page: 1, pageSize: 10 },
       notes: { evaluation: 1, matiere: 5 },
       discipline: { evaluation: 1 },
       trNiveau: { v: 5 }, // tranches de pension : niveau affiché
@@ -39,7 +39,7 @@
         { min: 10, max: 20, decision: "Promu" },
       ] },
       regl: { tranche: 1, statut: "tous" },
-      presence: { cours: 0 },
+      presence: { cours: 0, date: AUJOURDHUI },
       roleSel: 3,
       baremeSel: 1,
     },
@@ -54,7 +54,7 @@
     // Historique des inscriptions : filtres saisis / appliqués (envoyés au backend) et pagination
     hist: { du: "", au: "", q: "", applique: { du: "", au: "", q: "" }, page: 1, pageSize: 10 },
     // Historique des règlements : filtres saisis / appliqués (GET /reglement/historique) et pagination
-    hreg: { du: "", au: "", q: "", applique: { du: "", au: "", q: "" }, page: 1, pageSize: 10 },
+    hreg: { du: "", au: "", q: "", statut: "tous", applique: { du: "", au: "", q: "" }, page: 1, pageSize: 10 },
     editInsc: null,
     // Enseignants : filtres saisis / appliqués (backend), pagination, dialogues
     ens: { q: "", matiere: "", applique: { q: "", matiere: "" }, page: 1, pageSize: 10 },
@@ -65,6 +65,8 @@
     vers: { periode: "", q: "", matiere: "", applique: { periode: "", q: "", matiere: "" }, page: 1, pageSize: 10 },
     // Moyens de paiement : non configurés par défaut, filtres nom / matière appliqués (backend), pagination
     nc: null, // nouveau cours (dialogue d'ajout)
+    // Saisies en masse (appel, présence des enseignants, notes, discipline) : clé -> mode modification activé, brouillon non enregistré
+    edition: {}, brouillons: {}, notesEnregistrees: {},
     // Présence des enseignants : date et nom appliqués (GET /presence-enseignant/jour), saisie en cours non enregistrée
     pe: { date: AUJOURDHUI, q: "", applique: { date: AUJOURDHUI, q: "" }, saisie: {} }, // applique.classe : fixée au 1er affichage
     mp: { config: "non", q: "", matiere: "", applique: { q: "", matiere: "" }, page: 1, pageSize: 10 },
@@ -161,7 +163,9 @@
     const n = D.notes[idEval]?.[idMat]?.[idEl];
     return n == null ? undefined : n;
   }
-  const elevesClasse = idClasse => D.eleves.filter(e => e.classe === Number(idClasse) && e.actif);
+  const elevesClasse = idClasse => D.eleves.filter(e => e.classe === Number(idClasse) && e.actif && e.inscrit !== false);
+  const estInscrit = e => e.inscrit !== false;
+  const tagInscription = e => estInscrit(e) ? tag("success", t("c.inscrit")) : tag("warn", t("c.nonInscrit"));
   const evalsTrimestre = idT => D.evaluations.filter(e => e.trimestre === Number(idT) && !parentDe(e.id));
 
   // Notes sur 20 : {idEleve: {idMatiere: note}}
@@ -569,7 +573,7 @@
   const CLES_ECRANS = {
     eleves: () => [],
     edt: () => [],
-    presences: () => [S.f.presence.cours],
+    presences: () => [S.f.presence.cours, S.f.presence.date],
     notes: () => [S.f.notes.evaluation, S.f.notes.matiere],
     discipline: () => [S.f.discipline.evaluation],
     bulletins: () => [S.f.bulletin.type, S.f.bulletin.periode, S.f.bulletin.seuil, JSON.stringify(S.f.bulletin.regles)],
@@ -682,12 +686,18 @@
 
   /* ---------------- Élèves ---------------- */
   // Simule GET /eleves/by-classe/{id}?page=&page_size=&q=&genre= (filtre et pagination faits par le backend)
-  function pageElevesClasse() {
+  // Simule GET /eleve/by-classe/{id}?q=&genre=&statut= (statut : "" = tous, inscrit, non_inscrit ; sans page = toute la liste pour l'export)
+  function elevesClasseFiltres() {
     const f = S.f.eleves;
     const termes = f.qApplique.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const tous = D.eleves.filter(e => e.classe === Number(S.sel.classe) && (!f.genre || e.genre === f.genre)
+    return D.eleves.filter(e => e.classe === Number(S.sel.classe) && (!f.genre || e.genre === f.genre)
+      && (!f.statut || (f.statut === "inscrit") === estInscrit(e))
       && termes.every(x => `${e.nom} ${e.prenom} ${e.matricule}`.toLowerCase().includes(x)))
       .sort((a, b) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`));
+  }
+  function pageElevesClasse() {
+    const f = S.f.eleves;
+    const tous = elevesClasseFiltres();
     const totalPages = Math.max(1, Math.ceil(tous.length / f.pageSize));
     const page = Math.min(Math.max(1, f.page), totalPages);
     return { page, totalPages, total: tous.length, eleves: tous.slice((page - 1) * f.pageSize, page * f.pageSize) };
@@ -716,13 +726,13 @@
         <td>${e.genre === "F" ? t("c.fille") : t("c.garcon")}</td>
         <td>${esc(classe(e.classe).libelle)}</td>
         <td>${e.redoublant ? tag("warn", t("eleve.redoublant")) : ""} ${e.nouveau ? tag("info", t("eleve.nouveau")) : ""}</td>
-        <td>${tag("success", t("c.inscrit"))}</td>
+        <td>${tagInscription(e)}</td>
         <td class="right">${can("eleve:modifier") ? `<button class="btn text icon sm" data-act="modifier-eleve" data-v="${e.id}" title="${t("c.modifier")}"><i class="pi pi-pencil"></i></button>` : ""}<button class="btn text icon sm" data-go="eleves/${e.id}" title="${t("c.voir")}"><i class="pi pi-eye"></i></button></td>
       </tr>`).join("");
   }
   const ligneResultatEcole = e => `<tr class="clickable" data-go="eleves/${e.id}"><td class="mono">${esc(e.matricule)}</td>
     <td><div class="person"><span class="avatar">${esc(initiales(e.prenom, e.nom))}</span><div>${esc(e.nom)} ${esc(e.prenom)}<div class="sub">${t("eleve.ne", { date: fmtDate(e.naissance), lieu: e.lieu })}</div></div></div></td>
-    <td>${esc(classe(e.classe).libelle)}</td><td class="right"><button class="btn text icon sm" data-go="eleves/${e.id}" title="${t("c.voir")}"><i class="pi pi-eye"></i></button></td></tr>`;
+    <td>${estInscrit(e) ? esc(classe(e.classe).libelle) : tag("warn", t("c.nonInscrit"))}</td><td class="right"><button class="btn text icon sm" data-go="eleves/${e.id}" title="${t("c.voir")}"><i class="pi pi-eye"></i></button></td></tr>`;
   function ecranEleves() {
     const f = S.f.eleves;
     // 1. Recherche sur toute l'école (un appel, déclenché par le bouton ou Entrée, 3 caractères minimum)
@@ -745,7 +755,7 @@
     // 2. Recherche par classe : un appel au clic sur « Rechercher », puis filtre local sans appel
     const charge = estAffiche("eleves");
     const pageCourante = charge ? pageElevesClasse() : null;
-    const nbClasse = charge ? D.eleves.filter(e => e.classe === Number(S.sel.classe)).length : 0;
+    const nbFiltres = charge ? pageCourante.total : 0;
     return entete(t("eleves.titre"), t("eleves.sousTitre"), can("eleve:inscrire") ? `<button class="btn" data-go="inscription"><i class="pi pi-user-plus"></i>${t("dash.aInscrire")}</button>` : "") + carteEcole + `
       <div class="card">
         <div class="card-head"><div><h2>${t("eleves.parClasse")}</h2><div class="small muted">${t("eleves.parClasseAide")}</div></div></div>
@@ -755,10 +765,11 @@
           <form class="filters" data-form="filtre-classe">
             <div class="field" style="width:280px"><label>${t("eleves.filtrerClasse")}</label><div class="input-icon"><i class="pi pi-filter"></i><input class="input" id="q-classe" value="${esc(f.q)}" placeholder="${t("eleves.rechercherPh")}" autocomplete="off"></div></div>
             <div class="field"><label>${t("c.genre")}</label><select class="select" data-f="eleves.genre">${option("", t("c.tous"), f.genre)}${option("F", t("c.fille"), f.genre)}${option("M", t("c.garcon"), f.genre)}</select></div>
+            <div class="field"><label>${t("c.inscription")}</label><select class="select" data-f="eleves.statut">${option("", t("c.tous"), f.statut)}${option("inscrit", t("eleves.inscrits"), f.statut)}${option("non_inscrit", t("eleves.nonInscrits"), f.statut)}</select></div>
             <button class="btn outlined" type="submit"><i class="pi pi-filter"></i>${t("c.filtrer")}</button>
-            ${f.qApplique || f.genre ? `<button class="btn text" type="button" data-act="effacer-filtre-classe"><i class="pi pi-times"></i>${t("c.effacer")}</button>` : ""}
+            ${f.qApplique || f.genre || f.statut ? `<button class="btn text" type="button" data-act="effacer-filtre-classe"><i class="pi pi-times"></i>${t("c.effacer")}</button>` : ""}
           </form>
-          <div class="row"><span class="tag info">${classe(S.sel.classe).libelle} · ${nbClasse} ${t("c.eleves")}</span><button class="btn secondary sm"><i class="pi pi-download"></i>${t("c.exporter")}</button></div>
+          <div class="row"><span class="tag info">${classe(S.sel.classe).libelle} · ${nbFiltres} ${t("c.eleves")}</span><button class="btn secondary sm" data-act="exporter-eleves" ${nbFiltres ? "" : "disabled"} title="${t("eleves.exporterAide")}"><i class="pi pi-file-pdf"></i>${t("eleves.exporterPdf")}</button></div>
         </div>
         <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.matricule")}</th><th>${t("c.eleve")}</th><th>${t("c.genre")}</th><th>${t("c.classe")}</th><th>${t("eleve.statut")}</th><th>${t("c.inscription")}</th><th></th></tr></thead>
           <tbody>${lignesEleves(pageCourante.eleves)}</tbody></table></div>
@@ -774,7 +785,9 @@
     const b = res.bulletins.find(x => x.e.id === e.id);
     const onglets = [["infos", "eleve.tInfos"], ["notes", "eleve.tNotes"], ["scolarite", "eleve.tScolarite"], ["discipline", "eleve.tDiscipline"]];
     let corps = "";
-    if (tab === "infos") {
+    if (!estInscrit(e) && tab !== "infos") {
+      corps = `<div class="empty"><i class="pi pi-info-circle" style="font-size:28px"></i><p>${t("eleve.nonInscritInfo", { c: esc(classe(e.classe).libelle) })}</p></div>`;
+    } else if (tab === "infos") {
       const champ = (l, v) => `<div class="field"><label>${t(l)}</label><div>${esc(v || "—")}</div></div>`;
       corps = `<div class="form-grid">
         ${champ("eleve.nom", e.nom)}${champ("eleve.prenom", e.prenom)}${champ("eleve.naissance", fmtDate(e.naissance))}${champ("eleve.lieu", e.lieu)}
@@ -803,11 +816,11 @@
         <div class="row-between">
           <div class="row" style="gap:16px"><span class="avatar lg">${esc(initiales(e.prenom, e.nom))}</span>
             <div><h1>${esc(e.nom)} ${esc(e.prenom)}</h1><div class="row small muted" style="margin-top:6px"><span class="mono">${esc(e.matricule)}</span>·<span>${esc(classe(e.classe).libelle)}</span>·<span>${esc(D.ecole.annee)}</span></div>
-            <div class="row" style="margin-top:8px">${tag("success", t("c.inscrit"))}${e.redoublant ? tag("warn", t("eleve.redoublant")) : ""}${e.nouveau ? tag("info", t("eleve.nouveau")) : ""}</div></div></div>
+            <div class="row" style="margin-top:8px">${tagInscription(e)}${e.redoublant ? tag("warn", t("eleve.redoublant")) : ""}${e.nouveau ? tag("info", t("eleve.nouveau")) : ""}</div></div></div>
           <div class="row">
-            <button class="btn secondary" data-act="recu-eleve" data-v="${e.id}"><i class="pi pi-print"></i>${t("recu.bouton")}</button>
+            ${estInscrit(e) ? `<button class="btn secondary" data-act="recu-eleve" data-v="${e.id}"><i class="pi pi-print"></i>${t("recu.bouton")}</button>` : ""}
             ${can("eleve:modifier") ? `<button class="btn secondary" data-act="modifier-eleve" data-v="${e.id}"><i class="pi pi-pencil"></i>${t("c.modifier")}</button>` : ""}
-            ${can("bulletin:generer") ? `<button class="btn" data-act="apercu-bulletin" data-v="${e.id}"><i class="pi pi-file"></i>${t("bul.bulletinT1")}</button>` : ""}
+            ${can("bulletin:generer") && estInscrit(e) ? `<button class="btn" data-act="apercu-bulletin" data-v="${e.id}"><i class="pi pi-file"></i>${t("bul.bulletinT1")}</button>` : ""}
           </div>
         </div>
       </div>
@@ -1238,6 +1251,33 @@
       </tbody></table></div></div>`, `<button class="btn secondary" data-act="fermer">${t("c.fermer")}</button>`, true);
   }
 
+  /* ---------------- Saisies en masse : première saisie / consultation / modification ----------------
+     Première saisie (rien d'enregistré) : modifiable, aucune valeur par défaut, bandeau « pas encore enregistré ».
+     Déjà enregistré : lecture seule, bouton « Modifier » ; en modification : « Annuler » et « Enregistrer ». */
+  const enEdition = (cle, enregistre) => !enregistre || Boolean(S.edition[cle]);
+  const brouillon = cle => (S.brouillons[cle] ||= {});
+  const finSaisie = cle => { delete S.edition[cle]; delete S.brouillons[cle]; };
+  // Bandeau d'état de la saisie
+  const etatSaisie = (enregistre, edition, cleNonEnregistre = "saisie.nonEnregistre") => !enregistre
+    ? `<div class="message warn" style="margin:12px 16px"><i class="pi pi-exclamation-triangle"></i><div class="small"><b>${t("saisie.pasEncore")}</b> ${t(cleNonEnregistre)}</div></div>`
+    : edition ? `<div class="message" style="margin:12px 16px"><i class="pi pi-pencil"></i><div class="small">${t("saisie.enModification")}</div></div>`
+      : `<div class="message success" style="margin:12px 16px"><i class="pi pi-check-circle"></i><div class="small">${t("saisie.lectureSeule")}</div></div>`;
+  // Pied de la saisie : « Modifier » en consultation ; « Annuler » + « Enregistrer » en saisie
+  function piedSaisie(cle, enregistre, { peutAjouter, peutModifier, action, libelle, gauche = "" }) {
+    if (enregistre && !S.edition[cle]) {
+      return peutModifier ? `<div class="dialog-foot">${gauche}<button class="btn outlined" data-act="saisie-modifier" data-v="${cle}"><i class="pi pi-pencil"></i>${t("c.modifier")}</button></div>` : "";
+    }
+    if (!(enregistre ? peutModifier : peutAjouter)) return "";
+    return `<div class="dialog-foot">${gauche}${enregistre ? `<button class="btn secondary" data-act="saisie-annuler" data-v="${cle}">${t("c.annuler")}</button>` : ""}<button class="btn" data-act="${action}"><i class="pi pi-save"></i>${t(libelle)}</button></div>`;
+  }
+
+  function cleAppelCourant() {
+    const f = S.f.presence, jour = new Date(f.date + "T00:00:00").getDay() - 1;
+    const coursJour = D.cours.map((c, idx) => ({ c, idx })).filter(x => x.c[0] === jour && x.c[5] === Number(S.sel.classe)).sort((a, b) => a.c[1].localeCompare(b.c[1]));
+    const sel = coursJour[Math.min(Number(f.cours) || 0, coursJour.length - 1)];
+    return `appel|${sel.idx}|${f.date}`;
+  }
+
   /* ---------------- Présence des enseignants ---------------- */
   // Simule GET /presence-enseignant/jour?date_cours=&q= : cours de ce jour de la semaine (toutes classes) avec la présence saisie
   const clePresence = (date, idx) => `${date}|${idx}`;
@@ -1257,10 +1297,12 @@
     if (A.classe === undefined) { preselectionAutomatique(); A.classe = S.sel.classe || ""; }
     const jourSemaine = new Date(A.date + "T00:00:00").getDay() - 1; // 0 = lundi
     const lignes = lignesPresenceEns();
-    // Valeur affichée : saisie en cours, sinon présence enregistrée, sinon présent par défaut
-    const etat = l => F.saisie[l.idx] || l.saisi || "P";
-    const verrouille = l => l.saisi && !can("presence_enseignant:modifier");
-    const nbSaisis = lignes.filter(l => l.saisi).length, modifs = lignes.filter(l => F.saisie[l.idx] && F.saisie[l.idx] !== l.saisi).length;
+    // Valeur affichée : saisie en cours, sinon présence enregistrée ; aucune valeur par défaut
+    const etat = l => F.saisie[l.idx] || l.saisi || null;
+    const nbSaisis = lignes.filter(l => l.saisi).length;
+    // Consultation quand toutes les lignes affichées sont déjà enregistrées
+    const cle = `pe|${A.date}`, enregistre = lignes.length > 0 && nbSaisis === lignes.length, edition = enEdition(cle, enregistre);
+    const verrouille = l => !edition || (l.saisi && !can("presence_enseignant:modifier"));
     const titreJour = new Date(A.date + "T00:00:00").toLocaleDateString(S.lang === "fr" ? "fr-FR" : "en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     const nb = k => lignes.filter(l => etat(l) === k).length;
     return entete(t("pres.titre"), t("pres.sousTitreEns")) + ongletsPresence() + `
@@ -1274,14 +1316,16 @@
       <div class="message" style="margin-bottom:16px"><i class="pi pi-info-circle"></i><div class="small">${t("pres.aideEns")} ${t(D.configuration.isAbsenceJustifieePayee ? "sal.regleAvecJustifiees" : "sal.regleSansJustifiees")}</div></div>
       <div class="card"><div class="card-head"><h3 style="text-transform:capitalize">${esc(titreJour)}</h3>
         <div class="row">${lignes.length ? tag(nbSaisis === lignes.length ? "success" : "warn", t("pres.saisis", { n: nbSaisis, t: lignes.length })) : ""}
-        ${lignes.length && can("presence_enseignant:ajouter") ? `<button class="btn secondary sm" data-act="pe-tous-presents"><i class="pi pi-check"></i>${t("pres.tousPresents")}</button>` : ""}</div></div>
+        ${lignes.length && edition && can("presence_enseignant:ajouter") ? `<button class="btn secondary sm" data-act="pe-tous-presents"><i class="pi pi-check"></i>${t("pres.tousPresents")}</button>` : ""}</div></div>
+      ${lignes.length ? etatSaisie(enregistre, edition) : ""}
       ${lignes.length ? `<div class="table-wrap"><table class="dt"><thead><tr><th>${t("pres.horaire")}</th><th>${t("c.classe")}</th><th>${t("c.matiere")}</th><th>${t("ens.enseignant")}</th><th>${t("pres.statut")}</th><th>${t("pres.saisie")}</th></tr></thead><tbody>
       ${lignes.map(l => `<tr><td class="mono small" style="white-space:nowrap">${l.c[1]} – ${l.c[2]}</td><td><b>${esc(classe(l.c[5]).libelle)}</b></td><td>${esc(matiere(l.c[3]).libelle)}</td>
         <td><div class="person"><span class="avatar">${esc(initiales(l.e.prenom, l.e.nom))}</span>${esc(l.e.nom)} ${esc(l.e.prenom || "")}</div></td>
-        <td><div class="segmented">${[["P", "pres.present"], ["A", "pres.absent"], ["J", "pres.absentJustifie"]].map(([k, lb]) => `<button class="${etat(l) === k ? "on" : ""}" data-act="pe-statut" data-v="${l.idx}|${k}" ${verrouille(l) || !can("presence_enseignant:ajouter") ? "disabled" : ""}>${t(lb)}</button>`).join("")}</div></td>
+        <td><div class="segmented">${[["P", "pres.present"], ["A", "pres.absent"], ["J", "pres.absentJustifie"]].map(([k, lb]) => `<button class="${etat(l) === k ? "on" : ""}" data-act="pe-statut" data-v="${l.idx}|${k}" ${verrouille(l) ? "disabled" : ""}>${t(lb)}</button>`).join("")}</div></td>
         <td>${F.saisie[l.idx] && F.saisie[l.idx] !== l.saisi ? tag("info", t("pres.nonEnregistre")) : l.saisi ? tag("success", t("pres.enregistreTag")) : tag("secondary", t("pres.nonSaisi"))}</td></tr>`).join("")}
       </tbody></table></div>
-      ${can("presence_enseignant:ajouter") ? `<div class="dialog-foot">${nbSaisis && !can("presence_enseignant:modifier") ? `<span class="small muted" style="margin-right:auto">${t("pres.modifRefusee")}</span>` : ""}<button class="btn" data-act="pe-enregistrer" ${nbSaisis === lignes.length && !modifs ? "disabled" : ""}><i class="pi pi-save"></i>${t("pres.enregistrerEns")}</button></div>` : ""}`
+      ${piedSaisie(cle, enregistre, { peutAjouter: can("presence_enseignant:ajouter"), peutModifier: can("presence_enseignant:modifier"), action: "pe-enregistrer", libelle: "pres.enregistrerEns",
+        gauche: nbSaisis && !enregistre && !can("presence_enseignant:modifier") ? `<span class="small muted" style="margin-right:auto">${t("pres.modifRefusee")}</span>` : "" })}`
       : `<div class="empty"><i class="pi pi-calendar-times" style="font-size:28px"></i><p>${t(jourSemaine < 0 || jourSemaine > 4 ? "pres.weekEnd" : "pres.aucunCours")}</p></div>`}</div>`;
   }
 
@@ -1306,24 +1350,33 @@
   function ecranPresences() {
     if (ongletPresence() === "enseignants") return ecranPresencesEnseignants();
     if (!D.configuration.isAppel) return entete(t("pres.titre"), t("pres.sousTitre")) + ongletsPresence() + `<div class="message warn"><i class="pi pi-exclamation-triangle"></i>${t("pres.appelInactif")}</div>`;
-    const eleves = elevesClasse(S.sel.classe);
-    const coursJour = D.cours.filter(c => c[0] === 0 && c[5] === Number(S.sel.classe));
-    const etat = id => S.appel[id] || "P";
-    const nb = k => eleves.filter(e => etat(e.id) === k).length;
+    const eleves = elevesClasse(S.sel.classe), f = S.f.presence;
+    // Cours de la classe le jour de la semaine de la date choisie
+    const jour = new Date(f.date + "T00:00:00").getDay() - 1;
+    const coursJour = D.cours.map((c, idx) => ({ c, idx })).filter(x => x.c[0] === jour && x.c[5] === Number(S.sel.classe)).sort((a, b) => a.c[1].localeCompare(b.c[1]));
+    const sel = coursJour[Math.min(Number(f.cours) || 0, coursJour.length - 1)];
+    const cleAppel = sel ? `${sel.idx}|${f.date}` : null, cle = `appel|${cleAppel}`;
+    const enregistre = cleAppel ? D.appels[cleAppel] : null, edition = enEdition(cle, Boolean(enregistre));
+    // Aucun statut coché par défaut : brouillon, sinon appel enregistré
+    const etat = id => brouillon(cle)[id] ?? enregistre?.[id] ?? null;
+    const nb = k => eleves.filter(e => etat(e.id) === k).length, nbRenseignes = eleves.filter(e => etat(e.id)).length;
     return entete(t("pres.titre"), t("pres.sousTitre")) + ongletsPresence() + `
       <div class="card" style="margin-bottom:16px"><div class="card-body"><div class="filters">
         ${filtreClasse(true)}
-        <div class="field"><label>${t("c.cours")}</label><select class="select" data-f="presence.cours">${coursJour.map((c, i) => option(i, `${c[1]} – ${c[2]} · ${matiere(c[3]).libelle}`, S.f.presence.cours)).join("")}</select></div>
-        <div class="field"><label>${t("c.date")}</label><input class="input" type="date" value="${AUJOURDHUI}"></div>
+        <div class="field"><label>${t("c.date")}</label><input class="input" type="date" data-f="presence.date" value="${f.date}" max="${AUJOURDHUI}"></div>
+        <div class="field"><label>${t("c.cours")}</label><select class="select" data-f="presence.cours" ${coursJour.length ? "" : "disabled"}>${coursJour.length ? coursJour.map((x, i) => option(i, `${x.c[1]} – ${x.c[2]} · ${matiere(x.c[3]).libelle}`, f.cours)).join("") : option("", t("pres.aucunCours"), "")}</select></div>
         ${boutonAfficher("presences")}
         ${estAffiche("presences") ? `<div class="row" style="margin-left:auto">${tag("success", `${t("pres.presents")} : ${nb("P")}`)}${tag("danger", `${t("pres.absents")} : ${nb("A")}`)}${tag("warn", `${t("pres.justifies")} : ${nb("J")}`)}</div>` : ""}
       </div></div></div>
-      ${estAffiche("presences") && eleves.length ? `<div class="card"><div class="card-head"><div class="row"><button class="btn secondary sm" data-act="tous-presents"><i class="pi pi-check"></i>${t("pres.tousPresents")}</button></div><span class="small muted">${t("pres.aide")}</span></div>
+      ${estAffiche("presences") && eleves.length && sel ? `<div class="card"><div class="card-head"><h3>${esc(matiere(sel.c[3]).libelle)} · ${sel.c[1]} – ${sel.c[2]}</h3>
+        <div class="row">${tag(nbRenseignes === eleves.length ? "success" : "warn", t("pres.renseignes", { n: nbRenseignes, t: eleves.length }))}${edition && can(enregistre ? "presence_eleve:modifier" : "presence_eleve:ajouter") ? `<button class="btn secondary sm" data-act="tous-presents"><i class="pi pi-check"></i>${t("pres.tousPresents")}</button>` : ""}</div></div>
+      ${etatSaisie(Boolean(enregistre), edition, "saisie.nonEnregistreAppel")}
       <div class="table-wrap"><table class="dt"><thead><tr><th>#</th><th>${t("c.eleve")}</th><th>${t("pres.statut")}</th></tr></thead><tbody>
       ${eleves.map((e, i) => `<tr><td class="muted">${i + 1}</td><td><div class="person"><span class="avatar">${esc(initiales(e.prenom, e.nom))}</span>${esc(e.nom)} ${esc(e.prenom)}</div></td>
-        <td><div class="segmented">${[["P", "pres.present"], ["A", "pres.absent"], ["J", "pres.absentJustifie"]].map(([k, l]) => `<button class="${etat(e.id) === k ? "on" : ""}" data-act="appel" data-v="${e.id}|${k}">${t(l)}</button>`).join("")}</div></td></tr>`).join("")}
+        <td><div class="segmented">${[["P", "pres.present"], ["A", "pres.absent"], ["J", "pres.absentJustifie"]].map(([k, l]) => `<button class="${etat(e.id) === k ? "on" : ""}" data-act="appel" data-v="${e.id}|${k}" ${edition ? "" : "disabled"}>${t(l)}</button>`).join("")}</div></td></tr>`).join("")}
       </tbody></table></div>
-      <div class="dialog-foot">${can("presence_eleve:ajouter") ? `<button class="btn" data-act="enregistrer-appel"><i class="pi pi-save"></i>${t("pres.enregistrer")}</button>` : ""}</div></div>` : zoneVide("presences")}`;
+      ${piedSaisie(cle, Boolean(enregistre), { peutAjouter: can("presence_eleve:ajouter"), peutModifier: can("presence_eleve:modifier"), action: "enregistrer-appel", libelle: "pres.enregistrer" })}</div>`
+      : estAffiche("presences") && !sel ? `<div class="card"><div class="empty"><i class="pi pi-calendar-times" style="font-size:28px"></i><p>${t(jour < 0 || jour > 4 ? "pres.weekEnd" : "pres.aucunCours")}</p></div></div>` : zoneVide("presences")}`;
   }
 
   /* ---------------- Évaluations ---------------- */
@@ -1436,16 +1489,22 @@
     }
 
     const parent = parentDe(ev.id);
-    const modifiable = can(valeurs.length ? "notation:modifier" : "notation:ajouter");
+    const cle = `notes|${ev.id}|${m.id}|${S.sel.classe}`;
+    const enregistre = Boolean(S.notesEnregistrees[cle]) || eleves.some(e => D.notes[ev.id]?.[m.id]?.[e.id] != null);
+    const edition = enEdition(cle, enregistre), br = brouillon(cle);
+    const modifiable = edition && can(enregistre ? "notation:modifier" : "notation:ajouter");
+    // Note affichée : brouillon (saisie en cours), sinon note enregistrée ; vide = non classé
+    const noteAffichee = e => e.id in br ? (br[e.id] === "" ? null : br[e.id]) : noteEval(ev.id, m.id, e.id);
     return entete(t("notes.titre"), t("notes.sousTitre")) + filtres + `
       ${parent && S.calcule[parent.parent] ? `<div class="message warn" style="margin-bottom:16px"><i class="pi pi-sync"></i><div class="small">${t("notes.recalculParent", { p: evaluation(parent.parent).libelle })}</div></div>` : ""}
       <div class="card"><div class="card-head"><h2>${esc(ev.libelle)} · ${esc(m.libelle)}</h2><div class="row"><span class="small muted">${t("notes.aideSaisie", { max: b.valeurMax })}</span></div></div>
+      ${etatSaisie(enregistre, edition)}
       <div class="table-wrap"><table class="dt"><thead><tr><th>#</th><th>${t("c.matricule")}</th><th>${t("c.eleve")}</th><th class="num">${t("notes.note")} / ${b.valeurMax}</th><th class="num">${t("notes.surVingtCol")}</th><th>${t("bul.appreciation")}</th></tr></thead><tbody>
-      ${eleves.map((e, i) => { const n = noteEval(ev.id, m.id, e.id); return `<tr><td class="muted">${i + 1}</td><td class="mono small">${esc(e.matricule)}</td><td>${esc(e.nom)} ${esc(e.prenom)}</td>
+      ${eleves.map((e, i) => { const n = noteAffichee(e); return `<tr><td class="muted">${i + 1}</td><td class="mono small">${esc(e.matricule)}</td><td>${esc(e.nom)} ${esc(e.prenom)}</td>
         <td class="num"><input class="input note" inputmode="decimal" data-note="${ev.id}|${m.id}|${e.id}" value="${n != null ? String(n).replace(".", S.lang === "fr" ? "," : ".") : ""}" placeholder="${t("notes.nc")}" ${modifiable ? "" : "disabled"}></td>
         <td class="num">${n != null ? fmt(sur20(n, m)) : "—"}</td><td>${n != null ? esc(appreciation(n, m.bareme)) : `<span class="muted">${t("notes.nonClasse")}</span>`}</td></tr>`; }).join("")}
       </tbody></table></div>${pied}
-      <div class="dialog-foot"><button class="btn secondary">${t("c.annuler")}</button>${modifiable ? `<button class="btn" data-act="enregistrer-notes"><i class="pi pi-save"></i>${t("notes.enregistrer")}</button>` : ""}</div></div>`;
+      ${piedSaisie(cle, enregistre, { peutAjouter: can("notation:ajouter"), peutModifier: can("notation:modifier"), action: "enregistrer-notes", libelle: "notes.enregistrer" })}</div>`;
   }
 
   /* ---------------- Discipline ---------------- */
@@ -1453,6 +1512,10 @@
     const f = S.f.discipline;
     const eleves = elevesClasse(S.sel.classe);
     const appel = D.configuration.isAppel;
+    // Mode manuel (sans appel) : saisie en masse des heures, même fonctionnement que l'appel et les notes
+    const discCle = `disc|${f.evaluation}|${S.sel.classe}`;
+    const discEnregistre = eleves.some(e => D.disciplines[f.evaluation]?.[e.id]);
+    const discEdition = enEdition(discCle, discEnregistre), discBrouillon = brouillon(discCle);
     return entete(t("disc.titre"), t("disc.sousTitre")) + `
       <div class="card" style="margin-bottom:16px"><div class="card-body"><div class="filters">
         <div class="field"><label>${t("c.evaluation")}</label><select class="select" data-f="discipline.evaluation">${D.evaluations.filter(e => !parentDe(e.id) && e.trimestre === 1).map(e => option(e.id, e.libelle, f.evaluation)).join("")}</select></div>
@@ -1463,11 +1526,14 @@
       <div class="message ${appel ? "" : "warn"}" style="margin-bottom:16px"><i class="pi pi-info-circle"></i><div class="small">${t(appel ? "disc.infoAppel" : "disc.infoManuel")}</div></div>
       ${estAffiche("discipline") && eleves.length ? `<div class="card"><div class="card-head"><h2>${esc(evaluation(f.evaluation).libelle)} · ${esc(classe(S.sel.classe).libelle)}</h2>
         ${appel && can("discipline_eleve:calculer") ? `<button class="btn" data-act="calculer-discipline"><i class="pi pi-calculator"></i>${t("disc.calculer")}</button>` : ""}</div>
+      ${!appel ? etatSaisie(discEnregistre, discEdition) : ""}
       <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.eleve")}</th><th class="num">${t("disc.nonJustifiees")}</th><th class="num">${t("disc.justifiees")}</th><th class="num">${t("disc.total")}</th><th>${t("disc.decision")}</th></tr></thead><tbody>
-      ${eleves.map(e => { const d = discipline(e.id, [Number(f.evaluation)]); const champ = v => appel ? `<b>${v}</b>` : `<input class="input note" value="${v}">`;
+      ${eleves.map(e => { const d = discipline(e.id, [Number(f.evaluation)]); const saisie = discBrouillon[e.id] || {}, base = D.disciplines[f.evaluation]?.[e.id];
+        const valeur = k => saisie[k] ?? (base ? base[k === "nj" ? "nonJustifie" : "justifie"] : "");
+        const champ = (v, k) => appel ? `<b>${v}</b>` : `<input class="input note" inputmode="numeric" data-disc="${e.id}|${k}" value="${valeur(k)}" ${discEdition ? "" : "disabled"}>`;
         return `<tr><td><div class="person"><span class="avatar">${esc(initiales(e.prenom, e.nom))}</span>${esc(e.nom)} ${esc(e.prenom)}</div></td><td class="num">${champ(d.nj)}</td><td class="num">${champ(d.j)}</td><td class="num"><b>${d.total} h</b></td><td>${d.decision ? tag(d.total > 10 ? "danger" : d.total > 5 ? "warn" : "success", d.decision) : "—"}</td></tr>`; }).join("")}
       </tbody></table></div>
-      ${!appel ? `<div class="dialog-foot"><button class="btn"><i class="pi pi-save"></i>${t("c.enregistrer")}</button></div>` : ""}</div>` : zoneVide("discipline")}`;
+      ${!appel ? piedSaisie(discCle, discEnregistre, { peutAjouter: can("discipline_eleve:ajouter"), peutModifier: can("discipline_eleve:modifier"), action: "enregistrer-discipline", libelle: "c.enregistrer" }) : ""}</div>` : zoneVide("discipline")}`;
   }
 
   /* ---------------- Bulletins ---------------- */
@@ -1608,6 +1674,26 @@
       `<button class="btn secondary" data-act="fermer">${t("c.fermer")}</button><button class="btn" data-act="imprimer"><i class="pi pi-print"></i>${t("recu.imprimer")}</button>`, true);
   }
 
+  /* ---------------- Export PDF de la liste des élèves d'une classe (filtres appliqués, toutes les pages) ---------------- */
+  function exportListeEleves() {
+    const f = S.f.eleves, liste = elevesClasseFiltres();
+    // Titre selon les filtres genre et inscription (ex. « Liste des élèves filles inscrites »)
+    const titre = t(`eleves.lt.${f.genre || "tous"}.${f.statut || "tous"}`);
+    const recherche = f.qApplique ? `<div style="color:#64748b">${t("eleves.rechercheListe", { q: esc(f.qApplique) })}</div>` : "";
+    const filles = liste.filter(e => e.genre === "F").length;
+    const droite = `<div style="text-align:right;flex:none"><h2>${titre}</h2><div style="font-weight:700">${esc(classe(S.sel.classe).libelle)} · ${esc(D.ecole.annee)}</div>${recherche}</div>`;
+    const papier = `<div class="paper print-area liste-eleves">
+      ${enteteDocument(droite)}
+      <table><thead><tr><th class="num">N°</th><th>${t("c.matricule")}</th><th>${t("eleves.nomPrenom")}</th><th>${t("c.genre")}</th><th>${t("eleve.naissance")}</th><th>${t("eleve.lieu")}</th><th>${t("eleve.statut")}</th><th>${t("c.inscription")}</th></tr></thead>
+      <tbody>${liste.map((e, i) => `<tr><td class="num">${i + 1}</td><td class="mono">${esc(e.matricule)}</td><td><b>${esc(e.nom)}</b> ${esc(e.prenom || "")}</td><td>${e.genre}</td><td>${fmtDate(e.naissance)}</td><td>${esc(e.lieu)}</td>
+        <td>${[e.redoublant ? t("eleve.redoublant") : "", e.nouveau ? t("eleve.nouveau") : ""].filter(Boolean).join(", ") || "—"}</td><td>${t(estInscrit(e) ? "c.inscrit" : "c.nonInscrit")}</td></tr>`).join("")}</tbody></table>
+      <p style="margin:10px 0 0"><b>${t("eleves.effectifListe", { n: liste.length, f: filles, g: liste.length - filles })}</b></p>
+      ${piedApplication(false, `<span>${t("eleves.editeLe", { date: fmtDate(AUJOURDHUI) })}</span>`)}
+    </div>`;
+    dialog(t("eleves.exporterPdf"), `<div class="small muted" style="margin-bottom:10px">${t("eleves.exportAide", { n: liste.length })}</div>${papier}`,
+      `<button class="btn secondary" data-act="fermer">${t("c.fermer")}</button><button class="btn" data-act="imprimer"><i class="pi pi-file-pdf"></i>${t("eleves.telechargerPdf")}</button>`, true);
+  }
+
   /* ---------------- Reçu d'inscription (imprimable) ---------------- */
   let numeroRecu = 127;
   const prochainNumeroRecu = () => `REC-2026-${String(++numeroRecu).padStart(5, "0")}`;
@@ -1669,7 +1755,7 @@
     const H = S.hreg, f = H.applique;
     const termes = normaliser(f.q.trim()).split(/\s+/).filter(Boolean);
     const filtres = D.reglements
-      .filter(r => (!f.du || r.date >= f.du) && (!f.au || r.date <= f.au))
+      .filter(r => (!f.du || r.date >= f.du) && (!f.au || r.date <= f.au) && (H.statut === "tous" || r.statut === H.statut))
       .filter(r => { const e = eleve(r.eleve); const texte = normaliser(`${e.nom} ${e.prenom || ""} ${e.matricule}`); return termes.every(x => texte.includes(x)); })
       .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
     const totalPages = Math.max(1, Math.ceil(filtres.length / H.pageSize)), page = Math.min(Math.max(1, H.page), totalPages);
@@ -1684,6 +1770,7 @@
         <div class="field" style="width:300px"><label>${t("eleves.nomOuMatricule")}</label><div class="input-icon"><i class="pi pi-search"></i><input class="input" id="hreg-q" value="${esc(H.q)}" placeholder="${t("eleves.rechercherPh")}" autocomplete="off"></div></div>
         <button class="btn" type="submit"><i class="pi pi-filter"></i>${t("c.filtrer")}</button>
         ${filtreActif ? `<button class="btn text" type="button" data-act="effacer-hreg"><i class="pi pi-times"></i>${t("c.effacer")}</button>` : ""}
+        <div class="field" style="width:auto;margin-left:auto"><label>${t("c.statut")}</label><div class="segmented">${[["tous", "c.tous"], ["valide", "sco.valides"], ["annule", "sco.annules"]].map(([k, l]) => `<button type="button" class="${H.statut === k ? "on" : ""}" data-act="hreg-statut" data-v="${k}">${t(l)}</button>`).join("")}</div></div>
         <div id="hreg-erreur" class="grow"></div>
       </form></div></div>
       <div class="grid grid-3" style="margin-bottom:16px">
@@ -1760,7 +1847,7 @@
     if (tranchesNiveau.length && !tranchesNiveau.some(x => x.id === f.tranche)) f.tranche = tranchesNiveau[0].id;
     const eleves = tranchesNiveau.length ? elevesClasse(S.sel.classe) : [];
     const situations = eleves.map(e => ({ e, ...situationTranche(e.id, f.tranche) }));
-    const filtrees = situations.filter(s => f.statut === "tous" || s.statut === f.statut);
+    const filtrees = situationsFiltrees(situations, f.statut);
     const attendu = situations.reduce((s, x) => s + x.tr.montant, 0), encaisse = situations.reduce((s, x) => s + Math.min(x.regle, x.tr.montant), 0);
     const nb = k => situations.filter(s => s.statut === k).length;
     const carte = (icone, sev, l, v, sous) => `<div class="card stat"><div class="stat-icon ${sev}"><i class="pi ${icone}"></i></div><div><div class="stat-label">${l}</div><div class="stat-value" style="font-size:20px">${v}</div><div class="stat-sub">${sous || ""}</div></div></div>`;
@@ -1769,7 +1856,7 @@
         ${filtreClasse(true)}
         <div class="field" style="width:280px"><label>${t("sco.tranche")}</label><select class="select" data-f="regl.tranche" ${tranchesNiveau.length ? "" : "disabled"}>${tranchesNiveau.map(x => option(x.id, `${x.libelle} · ${fcfa(x.montant)}`, f.tranche)).join("") || option("", "—")}</select></div>
         ${boutonAfficher("scolarite")}
-        <div class="field" style="width:auto"><label>${t("sco.statutPaiement")}</label><div class="segmented">${[["tous", "c.tous"], ["total", "pay.total"], ["partiel", "pay.partiel"], ["aucun", "pay.aucun"]].map(([k, l]) => `<button class="${f.statut === k ? "on" : ""}" data-act="regl-statut" data-v="${k}">${t(l)}</button>`).join("")}</div></div>
+        <div class="field" style="width:auto"><label>${t("sco.statutPaiement")}</label><div class="segmented">${[["tous", "c.tous"], ["total", "pay.total"], ["partiel", "pay.partiel"], ["aucun", "pay.aucun"], ["non_solde", "sco.nonSoldes"]].map(([k, l]) => `<button class="${f.statut === k ? "on" : ""}" data-act="regl-statut" data-v="${k}" ${k === "non_solde" ? `title="${t("sco.nonSoldesAide")}"` : ""}>${t(l)}</button>`).join("")}</div></div>
       </div></div></div>
       ${estAffiche("scolarite") && eleves.length ? `<div class="grid grid-4" style="margin-bottom:16px">
         ${carte("pi-wallet", "", t("sco.attendu"), fcfa(attendu))}
@@ -1777,7 +1864,9 @@
         ${carte("pi-hourglass", "warn", t("sco.resteARecouvrer"), fcfa(attendu - encaisse))}
         ${carte("pi-users", "danger", t("sco.repartition"), `${nb("total")} / ${nb("partiel")} / ${nb("aucun")}`, t("sco.repartitionSous"))}
       </div>
-      <div class="card"><div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.eleve")}</th><th class="num">${t("sco.montantTranche")}</th><th class="num">${t("sco.regle")}</th><th class="num">${t("sco.reste")}</th><th style="width:180px">${t("sco.progression")}</th><th>${t("c.statut")}</th><th></th></tr></thead><tbody>
+      <div class="card"><div class="card-head"><span class="tag info">${esc(byId(D.tranches, f.tranche).libelle)} · ${filtrees.length} ${t("c.eleves")}</span>
+        <button class="btn secondary sm" data-act="exporter-reglements" ${filtrees.length ? "" : "disabled"} title="${t("sco.exporterAide")}"><i class="pi pi-file-pdf"></i>${t("eleves.exporterPdf")}</button></div>
+        <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.eleve")}</th><th class="num">${t("sco.montantTranche")}</th><th class="num">${t("sco.regle")}</th><th class="num">${t("sco.reste")}</th><th style="width:180px">${t("sco.progression")}</th><th>${t("c.statut")}</th><th></th></tr></thead><tbody>
       ${filtrees.length ? filtrees.map(s => `<tr><td><div class="person"><span class="avatar">${esc(initiales(s.e.prenom, s.e.nom))}</span><div>${esc(s.e.nom)} ${esc(s.e.prenom)}<div class="sub mono">${esc(s.e.matricule)}</div></div></div></td>
         <td class="num">${fcfa(s.tr.montant)}</td><td class="num">${fcfa(s.regle)}</td><td class="num"><b>${fcfa(s.reste)}</b></td>
         <td><div class="progress ${s.statut === "total" ? "success" : s.statut === "partiel" ? "warn" : "danger"}"><div style="width:${s.pct}%"></div></div></td><td>${tagPaiement(s.statut)}</td>
@@ -1785,16 +1874,44 @@
         : `<tr><td colspan="7"><div class="empty">${t("c.aucunResultat")}</div></td></tr>`}
       </tbody></table></div></div>` : zoneVide("scolarite")}`;
   }
-  function dialogNouveauReglement(idEl) {
+  const situationsFiltrees = (situations, statut) => situations
+    .filter(s => statut === "tous" || (statut === "non_solde" ? s.statut !== "total" : s.statut === statut))
+    .sort((a, b) => `${a.e.nom} ${a.e.prenom}`.localeCompare(`${b.e.nom} ${b.e.prenom}`));
+
+  /* Export PDF de la situation d'une tranche (généré dans Angular à partir de la liste retournée par le backend).
+     Titre : « <tranche> – <liste selon le statut> », ex. « 1ère tranche – Liste des élèves à jour » */
+  function exportReglementsTranche() {
+    const f = S.f.regl, tr = byId(D.tranches, f.tranche);
+    const liste = situationsFiltrees(elevesClasse(S.sel.classe).map(e => ({ e, ...situationTranche(e.id, f.tranche) })), f.statut);
+    const somme = k => liste.reduce((s, x) => s + x[k], 0);
+    const droite = `<div style="text-align:right;flex:none;max-width:55%"><h2>${esc(tr.libelle)} – ${t("sco.lt." + f.statut)}</h2><div style="font-weight:700">${esc(classe(S.sel.classe).libelle)} · ${esc(D.ecole.annee)}</div><div style="color:#64748b">${t("sco.montantTranche")} : ${fcfa(tr.montant)}</div></div>`;
+    const papier = `<div class="paper print-area liste-eleves">
+      ${enteteDocument(droite)}
+      <table><thead><tr><th class="num">N°</th><th>${t("c.matricule")}</th><th>${t("eleves.nomPrenom")}</th><th class="num">${t("sco.regle")}</th><th class="num">${t("sco.reste")}</th><th>${t("c.statut")}</th></tr></thead>
+      <tbody>${liste.map((s, i) => `<tr><td class="num">${i + 1}</td><td class="mono">${esc(s.e.matricule)}</td><td><b>${esc(s.e.nom)}</b> ${esc(s.e.prenom || "")}</td><td class="num">${fcfa(s.regle)}</td><td class="num">${fcfa(s.reste)}</td><td>${t("pay." + s.statut)}</td></tr>`).join("")}
+      <tr class="g"><td colspan="3">${t("c.total")}</td><td class="num">${fcfa(somme("regle"))}</td><td class="num">${fcfa(somme("reste"))}</td><td></td></tr></tbody></table>
+      <p style="margin:10px 0 0"><b>${t("sco.effectifListe", { n: liste.length })}</b></p>
+      ${piedApplication(false, `<span>${t("eleves.editeLe", { date: fmtDate(AUJOURDHUI) })}</span>`)}
+    </div>`;
+    dialog(t("eleves.exporterPdf"), `<div class="small muted" style="margin-bottom:10px">${t("sco.exportAide", { n: liste.length })}</div>${papier}`,
+      `<button class="btn secondary" data-act="fermer">${t("c.fermer")}</button><button class="btn" data-act="imprimer"><i class="pi pi-file-pdf"></i>${t("eleves.telechargerPdf")}</button>`, true);
+  }
+
+  // POST /reglement/add : total = solde le reste de la tranche ; partiel = montant saisi, inférieur au reste
+  function dialogNouveauReglement(idEl, type = "total") {
     const e = eleve(idEl), s = situationTranche(e.id, S.f.regl.tranche);
+    const partiel = type === "partiel";
     dialog(t("sco.encaisserTitre"), `<div class="stack">
       <div class="person"><span class="avatar">${esc(initiales(e.prenom, e.nom))}</span><div><b>${esc(e.nom)} ${esc(e.prenom)}</b><div class="sub">${esc(classe(e.classe).libelle)} · ${esc(s.tr.libelle)}</div></div></div>
       <div class="message"><i class="pi pi-info-circle"></i><span class="small">${t("pay.regleReste", { regle: fcfa(s.regle), reste: fcfa(s.reste) })}</span></div>
-      <div class="form-grid"><div class="field"><label>${t("c.montant")} (FCFA) *</label><input class="input" value="${s.reste}"></div>
-      <div class="field"><label>${t("sco.typeReglement")}</label><div class="segmented"><button class="on">${t("pay.total")}</button><button>${t("pay.partiel")}</button></div></div>
+      <div class="form-grid">
+      <div class="field"><label>${t("sco.typeReglement")} *</label><div class="segmented">${[["total", "pay.total"], ["partiel", "pay.partiel"]].map(([k, l]) => `<button type="button" class="${type === k ? "on" : ""}" data-act="enc-type" data-v="${e.id}|${k}">${t(l)}</button>`).join("")}</div></div>
+      <div class="field"><label for="enc-montant">${t("c.montant")} (FCFA) *</label><input class="input" id="enc-montant" type="number" min="1" max="${Math.max(s.reste - 1, 1)}" step="any" value="${partiel ? "" : s.reste}" ${partiel ? 'placeholder="' + t("sco.montantPartielPh", { r: fcfa(s.reste) }) + '" autofocus' : "readonly"}>
+        <span class="hint">${t(partiel ? "sco.aidePartiel" : "sco.aideTotal", { r: fcfa(s.reste) })}</span></div>
       <div class="field"><label>${t("c.date")}</label><input class="input" type="date" value="${AUJOURDHUI}" disabled></div>
-      <div class="field"><label>${t("sco.enregistrePar")}</label><input class="input" value="${esc(utilisateurCourant().username)}" disabled></div></div></div>`,
-      `<button class="btn secondary" data-act="fermer">${t("c.annuler")}</button><button class="btn" data-act="valider-reglement" data-v="${e.id}"><i class="pi pi-check"></i>${t("sco.valider")}</button>`);
+      <div class="field"><label>${t("sco.enregistrePar")}</label><input class="input" value="${esc(utilisateurCourant().username)}" disabled></div></div>
+      <div id="enc-erreur"></div></div>`,
+      `<button class="btn secondary" data-act="fermer">${t("c.annuler")}</button><button class="btn" data-act="valider-reglement" data-v="${e.id}|${type}"><i class="pi pi-check"></i>${t("sco.valider")}</button>`);
   }
   function dialogHistorique(idEl) {
     const e = eleve(idEl);
@@ -1838,7 +1955,7 @@
     } else if (tab === "decisions") {
       corps = `<div class="message warn" style="margin-bottom:16px"><i class="pi pi-lock"></i><div class="small">${t("adm.decisionsBloquees")}</div></div>
         <div class="card"><div class="card-head"><h2>${t("adm.decisions")}</h2></div><div class="table-wrap"><table class="dt"><thead><tr><th>${t("disc.decision")}</th><th>${t("adm.libelleEn")}</th><th class="num">${t("adm.heuresMin")}</th><th class="num">${t("adm.heuresMax")}</th><th class="num">${t("adm.elevesConcernes")}</th></tr></thead><tbody>
-        ${D.decisions.map(d => `<tr><td>${esc(d.libelle)}</td><td>${d.libelleEn ? esc(d.libelleEn) : `<span class="muted">—</span>`}</td><td class="num">${d.min}</td><td class="num">${d.max === 999 ? "∞" : d.max}</td><td class="num">${D.eleves.filter(e => { const x = discipline(e.id, [1]); return x.nj >= d.min && x.nj <= d.max; }).length}</td></tr>`).join("")}
+        ${D.decisions.map(d => `<tr><td>${esc(d.libelle)}</td><td>${d.libelleEn ? esc(d.libelleEn) : `<span class="muted">—</span>`}</td><td class="num">${d.min}</td><td class="num">${d.max === 999 ? "∞" : d.max}</td><td class="num">${D.eleves.filter(e => { if (!estInscrit(e)) return false; const x = discipline(e.id, [1]); return x.nj >= d.min && x.nj <= d.max; }).length}</td></tr>`).join("")}
         </tbody></table></div></div>`;
     } else if (tab === "annees") {
       corps = `<div class="grid grid-2"><div class="card"><div class="card-head"><h2>${t("adm.annees")}</h2>${can("annee:ajouter") ? `<button class="btn sm"><i class="pi pi-plus"></i>${t("c.ajouter")}</button>` : ""}</div><div class="table-wrap"><table class="dt"><tbody>
@@ -1941,7 +2058,7 @@
 
   function setFiltre(chemin, valeur) {
     const [a, b] = chemin.split(".");
-    const cible = a === "insc" ? S.insc : a === "hist" ? S.hist : a === "ens" ? S.ens : a === "sal" ? S.sal : a === "vers" ? S.vers : a === "mp" ? S.mp : a === "hreg" ? S.hreg : S.f[a];
+    const cible = a === "insc" ? S.insc : a === "hist" ? S.hist : a === "ens" ? S.ens : a === "sal" ? S.sal : a === "vers" ? S.vers : a === "mp" ? S.mp : a === "hreg" ? S.hreg : a === "pe" ? S.pe : S.f[a];
     cible[b] = isNaN(valeur) || valeur === "" ? valeur : Number(valeur);
   }
 
@@ -1994,7 +2111,9 @@
     },
     "page-hist": v => { S.hist.page = Number(v); render(); },
     "page-hreg": v => { S.hreg.page = Number(v); render(); },
-    "effacer-hreg": () => { Object.assign(S.hreg, { du: "", au: "", q: "", applique: { du: "", au: "", q: "" }, page: 1 }); render(); },
+    // Statut appliqué immédiatement (paramètre statut de GET /reglement/historique)
+    "hreg-statut": v => { S.hreg.statut = v; S.hreg.page = 1; render(); },
+    "effacer-hreg": () => { Object.assign(S.hreg, { du: "", au: "", q: "", statut: "tous", applique: { du: "", au: "", q: "" }, page: 1 }); render(); },
     "annuler-reglement-hist": v => {
       const r = D.reglements.find(x => x.id === Number(v));
       r.statut = "annule";
@@ -2006,15 +2125,16 @@
     "enregistrer-insc": () => enregistrerModificationInscription(),
     imprimer: () => window.print(),
     afficher: v => {
-      if (v === "eleves") Object.assign(S.f.eleves, { q: "", qApplique: "", genre: "", page: 1 });
+      if (v === "eleves") Object.assign(S.f.eleves, { q: "", qApplique: "", genre: "", statut: "", page: 1 });
       S.affiche[v] = cleEcran(v);
       render();
     },
     "page-eleves": v => { S.f.eleves.page = Number(v); render(); },
-    "effacer-filtre-classe": () => { Object.assign(S.f.eleves, { q: "", qApplique: "", genre: "", page: 1 }); render(); },
+    "effacer-filtre-classe": () => { Object.assign(S.f.eleves, { q: "", qApplique: "", genre: "", statut: "", page: 1 }); render(); },
+    "exporter-eleves": () => exportListeEleves(),
     "effacer-ecole": () => { S.qEcole = ""; S.rechercheEcole = null; render(); },
-    appel: v => { const [id, k] = v.split("|"); S.appel[id] = k; render(); },
-    "tous-presents": () => { S.appel = {}; render(); },
+    appel: v => { const [id, k] = v.split("|"); brouillon(cleAppelCourant())[id] = k; render(); },
+    "tous-presents": () => { const b = brouillon(cleAppelCourant()); elevesClasse(S.sel.classe).forEach(e => { b[e.id] = "P"; }); render(); },
     "pe-statut": v => { const [idx, k] = v.split("|"); S.pe.saisie[idx] = k; render(); },
     "pe-tous-presents": () => {
       lignesPresenceEns().forEach(l => { if (!(l.saisi && !can("presence_enseignant:modifier"))) S.pe.saisie[l.idx] = "P"; });
@@ -2022,37 +2142,71 @@
     },
     // Simule POST /presence-enseignant/jour : toutes les lignes affichées (présent par défaut)
     "pe-enregistrer": () => {
-      const A = S.pe.applique;
+      const A = S.pe.applique, lignes = lignesPresenceEns();
+      // Toutes les lignes doivent être renseignées (aucune valeur par défaut)
+      const manquantes = lignes.filter(({ idx }) => !(S.pe.saisie[idx] || D.presencesEnseignants[clePresence(A.date, idx)])).length;
+      if (manquantes) { toast("danger", t("saisie.incomplete"), t("pres.errIncomplet", { n: manquantes })); return; }
       let n = 0;
-      lignesPresenceEns().forEach(({ idx }) => {
-        const cle = clePresence(A.date, idx), avant = D.presencesEnseignants[cle], apres = S.pe.saisie[idx] || avant || "P";
+      lignes.forEach(({ idx }) => {
+        const cle = clePresence(A.date, idx), avant = D.presencesEnseignants[cle], apres = S.pe.saisie[idx] || avant;
         if (avant && avant !== apres && !can("presence_enseignant:modifier")) return;
         if (avant !== apres) { D.presencesEnseignants[cle] = apres; n++; }
       });
-      S.pe.saisie = {};
+      S.pe.saisie = {}; finSaisie(`pe|${A.date}`);
       render();
       toast("success", t("pres.enregistreEns"), t("pres.enregistreEnsTexte", { n }));
     },
-    "enregistrer-appel": () => toast("success", t("pres.enregistre"), t("pres.enregistreTexte")),
+    "saisie-modifier": v => { S.edition[v] = true; render(); },
+    "saisie-annuler": v => { finSaisie(v); if (v.startsWith("pe|")) S.pe.saisie = {}; render(); },
+    // Simule POST /presence-eleve/add-bulk (1re saisie) ou PATCH /presence-eleve/update-bulk (modification)
+    "enregistrer-appel": () => {
+      const cle = cleAppelCourant(), cleAppel = cle.slice("appel|".length), b = brouillon(cle), avant = D.appels[cleAppel] || {};
+      const eleves = elevesClasse(S.sel.classe), manquants = eleves.filter(e => !(b[e.id] ?? avant[e.id])).length;
+      if (manquants) { toast("danger", t("saisie.incomplete"), t("pres.errIncompletEleves", { n: manquants })); return; }
+      D.appels[cleAppel] = Object.fromEntries(eleves.map(e => [e.id, b[e.id] ?? avant[e.id]]));
+      finSaisie(cle); render();
+      toast("success", t("pres.enregistre"), t("pres.enregistreTexte"));
+    },
     dependances: v => dialogDependances(v),
     "supprimer-evaluation": v => confirmation(t("eval.confirmerSuppression", { e: evaluation(v).libelle }), depsDe(v).length && S.calcule[v] ? "eval.suppressionImpossible" : null),
     "calculer-notes": () => { S.calcule[S.f.notes.evaluation] = true; render(); toast("success", t("notes.calculOk"), t("notes.calculOkTexte")); },
     "enregistrer-notes": () => {
+      const f = S.f.notes, cle = `notes|${f.evaluation}|${f.matiere}|${S.sel.classe}`, b = brouillon(cle);
+      // Simule POST /notation/add-bulk (1re saisie) ou PATCH /notation/update-bulk : note vide = non classé
+      D.notes[f.evaluation] ||= {}; D.notes[f.evaluation][f.matiere] ||= {};
+      for (const [idEl, v] of Object.entries(b)) { if (v === "") delete D.notes[f.evaluation][f.matiere][idEl]; else D.notes[f.evaluation][f.matiere][idEl] = v; }
+      S.notesEnregistrees[cle] = true; finSaisie(cle); render();
       const p = parentDe(S.f.notes.evaluation);
       toast("success", t("notes.enregistreOk"), p && S.calcule[p.parent] ? t("notes.parentRecalcule", { p: evaluation(p.parent).libelle }) : t("notes.enregistreOkTexte"));
     },
     "calculer-discipline": () => toast("success", t("disc.calculOk"), t("disc.calculOkTexte")),
+    // Simule POST /discipline-eleve/add-bulk ou PATCH /discipline-eleve/update-bulk (mode manuel)
+    "enregistrer-discipline": () => {
+      const ev = S.f.discipline.evaluation, cle = `disc|${ev}|${S.sel.classe}`, b = brouillon(cle);
+      const eleves = elevesClasse(S.sel.classe), base = D.disciplines[ev] || {};
+      const val = (e, k) => b[e.id]?.[k] ?? (base[e.id] ? base[e.id][k === "nj" ? "nonJustifie" : "justifie"] : "");
+      const ok = v => v !== "" && Number.isInteger(Number(v)) && Number(v) >= 0;
+      if (eleves.some(e => !ok(val(e, "nj")) || !ok(val(e, "j")))) { toast("danger", t("saisie.incomplete"), t("disc.errIncomplet")); return; }
+      D.disciplines[ev] = { ...base, ...Object.fromEntries(eleves.map(e => [e.id, { nonJustifie: Number(val(e, "nj")), justifie: Number(val(e, "j")) }])) };
+      finSaisie(cle); render(); toast("success", t("disc.enregistreOk"), classe(S.sel.classe).libelle);
+    },
     "bul-langue": v => { S.f.bulletin.langue = v; render(); },
     "bul-type": v => { S.f.bulletin.type = v; S.f.bulletin.periode = 1; render(); },
     "apercu-bulletin": v => apercuBulletin(v),
     "pdf-bulletins": () => { fermer(); toast("info", t("bul.pdfLance"), t("bul.pdfLanceTexte")); },
     "regl-statut": v => { S.f.regl.statut = v; render(); },
+    "exporter-reglements": () => exportReglementsTranche(),
     "nouveau-reglement": v => dialogNouveauReglement(v),
+    "enc-type": v => { const [idEl, type] = v.split("|"); dialogNouveauReglement(Number(idEl), type); },
     "valider-reglement": v => {
-      const s = situationTranche(Number(v), S.f.regl.tranche);
-      const nouveau = { id: Date.now(), eleve: Number(v), tranche: S.f.regl.tranche, montant: s.reste, type: s.regle ? "partiel" : "total", statut: "valide", date: AUJOURDHUI, user: utilisateurCourant().username };
+      const [idEl, type] = v.split("|"), s = situationTranche(Number(idEl), S.f.regl.tranche);
+      const montant = Number(document.getElementById("enc-montant").value);
+      // Mêmes contrôles que le backend : partiel = 0 < montant < reste (TYPE_REGLEMENT_INCOHERENT, MONTANT_SUPERIEUR_AU_RESTE)
+      const erreur = type === "partiel" && !(montant > 0 && montant < s.reste) ? t("sco.errPartiel", { r: fcfa(s.reste) }) : null;
+      if (erreur) { document.getElementById("enc-erreur").innerHTML = `<div class="message danger"><i class="pi pi-times-circle"></i><div class="small">${erreur}</div></div>`; return; }
+      const nouveau = { id: Date.now(), eleve: Number(idEl), tranche: S.f.regl.tranche, montant: type === "total" ? s.reste : montant, type, statut: "valide", date: AUJOURDHUI, user: utilisateurCourant().username };
       D.reglements.push(nouveau);
-      fermer(); render(); toast("success", t("sco.reglementOk"), fcfa(s.reste));
+      fermer(); render(); toast("success", t("sco.reglementOk"), `${fcfa(nouveau.montant)}${type === "partiel" ? ` · ${t("sco.resteApres", { r: fcfa(s.reste - nouveau.montant) })}` : ""}`);
       recuReglement(nouveau.id); // reçu à imprimer après l'enregistrement
     },
     historique: v => dialogHistorique(v),
@@ -2221,6 +2375,7 @@
       if (el.dataset.f === "eleves.genre" || el.dataset.f === "eleves.pageSize") S.f.eleves.page = 1;
       if (el.dataset.f === "hist.pageSize") S.hist.page = 1;
       if (el.dataset.f === "hreg.pageSize") S.hreg.page = 1;
+      if (el.dataset.f === "presence.date") S.f.presence.cours = 0;
       if (el.dataset.f === "ens.pageSize") S.ens.page = 1;
       if (el.dataset.f === "sal.pageSize") S.sal.page = 1;
       if (el.dataset.f === "vers.pageSize") S.vers.page = 1;
@@ -2259,14 +2414,21 @@
     }
     if (el.dataset.choix) { S.choixClasse[el.dataset.choix] = Number(el.value); return; }
     if (el.dataset.regle) { const [i, k] = el.dataset.regle.split("|"); S.f.bulletin.regles[i][k] = k === "decision" ? el.value : Number(el.value.replace(",", ".")); render(); return; }
+    if (el.dataset.disc) {
+      const [idEl, k] = el.dataset.disc.split("|"), b = brouillon(`disc|${S.f.discipline.evaluation}|${S.sel.classe}`);
+      b[idEl] = { ...(b[idEl] || {}), [k]: el.value.trim() };
+      render();
+      return;
+    }
     if (el.dataset.note) {
       const [idEval, idMat, idEl] = el.dataset.note.split("|").map(Number);
       const brut = el.value.trim().replace(",", ".");
       const max = bareme(matiere(idMat).bareme).valeurMax;
-      if (brut === "") { delete D.notes[idEval][idMat][idEl]; render(); return; }
+      const br = brouillon(`notes|${idEval}|${idMat}|${S.sel.classe}`);
+      if (brut === "") { br[idEl] = ""; render(); return; }
       const v = Number(brut);
       if (isNaN(v) || v < 0 || v > max) { el.classList.add("invalid"); toast("danger", t("notes.horsBareme"), t("notes.horsBaremeTexte", { max })); return; }
-      D.notes[idEval][idMat][idEl] = Math.round(v * 100) / 100;
+      br[idEl] = Math.round(v * 100) / 100;
       render();
     }
   });

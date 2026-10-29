@@ -232,6 +232,9 @@
   // Présence des enseignants (table presence_enseignant) : "date|index du cours" -> P (présent), A (absent), J (absence justifiée)
   // Exemple : vendredi 11/12/2026 saisi, le dernier cours de la journée avec une absence
   const presencesEnseignants = {};
+  // Appels des élèves enregistrés : "index du cours|date" -> {idEleve: P | A | J}
+  // Exemple : le cours de 07:30 du lundi 14/12/2026 (2nde C) est déjà enregistré, les autres non
+  const appels = { "0|2026-12-14": Object.fromEntries(eleves.filter(e => e.classe === 6).map(e => [e.id, e.id === 4 ? "A" : e.id === 7 ? "J" : "P"])) };
   cours.forEach((c, i) => { if (c[0] === 4) presencesEnseignants[`2026-12-11|${i}`] = c[1] === "10:45" ? "A" : "P"; });
 
   // Catalogue des permissions (identique au script data_roles_permissions.py du backend)
@@ -293,6 +296,17 @@
     numero: `REC-2026-${String(101 + i).padStart(5, "0")}`,
     derniereModif: null, // { date, user } : date et utilisateur de la dernière modification
   }));
+  // Élèves placés dans la classe (passage automatique) dont l'inscription n'est pas encore finalisée (is_inscris = false)
+  [["ABOUEM", "Sandrine", "F"], ["NKOULOU", "Franck", "M"], ["TSAFACK", "Diane", "F"]].forEach(([nom, prenom, genre], i) => {
+    const id = eleves.length + 1;
+    eleves.push({
+      id, matricule: `25${"NPQ"[i]}${String(id).padStart(4, "0")}`, nom, prenom, genre,
+      naissance: `2010-${String(3 + i * 4).padStart(2, "0")}-${String(11 + i * 6).padStart(2, "0")}`,
+      lieu: villes[(i + 2) % villes.length], pere: `${nom} ${["Martin", "Paul", "Samuel"][i]}`, mere: `${["OWONA", "FOUDA", "NDZIE"][i]} ${["Lucie", "Agnès", "Rose"][i]}`,
+      quartier: quartiers[(i + 3) % quartiers.length], telephone: `6 7${i} 4${i} 2${i} 8${i}`,
+      classe: 6, redoublant: false, nouveau: false, actif: true, inscrit: false,
+    });
+  });
   inscriptions[5].derniereModif = { date: "2026-09-21", user: "admin" };
   inscriptions[10].derniereModif = { date: "2026-09-25", user: "secretaire" };
   // Inscriptions d'autres classes (élèves non détaillés dans la maquette)
@@ -344,7 +358,7 @@
   window.DATA = {
     ecole, sections, cycles, niveaux, classes, baremes, appreciations, groupes, matieres, trimestres,
     evaluations, dependances, decisions, eleves, notes, disciplines, tranches, reglements, enseignants, cours,
-    catalogue, roles, utilisateurs, anciensEleves, inscriptions, heuresEnseignants, versementsSalaire, presencesEnseignants,
+    catalogue, roles, utilisateurs, anciensEleves, inscriptions, heuresEnseignants, versementsSalaire, presencesEnseignants, appels,
     configuration: { isAppel: true, isAbsenceJustifieePayee: false },
     annees: [
       { id: 1, code: "2025-2026", libelle: "2025-2026", cloture: true },

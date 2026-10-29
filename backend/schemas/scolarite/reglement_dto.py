@@ -4,7 +4,7 @@ from typing import Optional
 from pydantic import ConfigDict
 from sqlmodel import Field, SQLModel
 
-from common.enumeration import StatutPaiementTranche, StatutReglement
+from common.enumeration import StatutPaiementTranche, StatutReglement, TypeReglement
 
 
 class ReglementBase(SQLModel):
@@ -19,12 +19,14 @@ class ReglementBase(SQLModel):
 
 
 class ReglementCreateDTO(ReglementBase):
-    pass
+    """total : solde le reste de la tranche ; partiel : montant inférieur au reste"""
+    type: TypeReglement = Field(description="total ou partiel")
+    montant: float = Field(gt=0, description="Montant du reglement (au plus le reste a payer de la tranche)")
 
 
 class ReglementUpdateDTO(SQLModel):
-    type: Optional[str] = None
-    montant: Optional[float] = None
+    type: Optional[TypeReglement] = None
+    montant: Optional[float] = Field(default=None, gt=0)
     statut: Optional[StatutReglement] = None
 
 

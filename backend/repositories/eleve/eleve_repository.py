@@ -42,7 +42,9 @@ class EleveRepository(BaseRepository[Eleve]):
         )
         return self.session.exec(statement).all()
 
-    def _statement_classe(self, id_classe: int, id_annee: int, termes: list[str], genre: str | None):
+    def _statement_classe(self, id_classe: int, id_annee: int, termes: list[str], genre: str | None,
+                          is_inscris: bool | None = True):
+        """is_inscris : True = inscription finalisée, False = non finalisée, None = toutes"""
         statement = (
             select(Eleve, Inscription)
             .options(*self._noload_options())
@@ -50,26 +52,28 @@ class EleveRepository(BaseRepository[Eleve]):
             .where(
                 Inscription.id_classe == id_classe,
                 Inscription.id_annee == id_annee,
-                Inscription.is_inscris == True,
             )
         )
+        if is_inscris is not None:
+            statement = statement.where(Inscription.is_inscris == is_inscris)
         if termes:
             statement = statement.where(self._filtre_termes(termes))
         if genre:
             statement = statement.where(Eleve.genre == genre)
         return statement
 
-    def count_by_classe(self, id_classe: int, id_annee: int, termes: list[str], genre: str | None) -> int:
-        sous_requete = self._statement_classe(id_classe, id_annee, termes, genre).subquery()
+    def count_by_classe(self, id_classe: int, id_annee: int, termes: list[str], genre: str | None,
+                        is_inscris: bool | None = True) -> int:
+        sous_requete = self._statement_classe(id_classe, id_annee, termes, genre, is_inscris).subquery()
         return self.session.exec(select(func.count()).select_from(sous_requete)).one()
 
     def find_by_classe(
         self, id_classe: int, id_annee: int, termes: list[str], genre: str | None,
-        offset: int, limit: int,
+        offset: int, limit: int, is_inscris: bool | None = True,
     ) -> list[tuple[Eleve, Inscription]]:
-        """Élèves inscrits dans une classe pour une année, triés par nom puis prénom"""
+        """Élèves d'une classe pour une année (inscrits, non inscrits ou tous), triés par nom puis prénom"""
         statement = (
-            self._statement_classe(id_classe, id_annee, termes, genre)
+            self._statement_classe(id_classe, id_annee, termes, genre, is_inscris)
             .order_by(Eleve.nom, Eleve.prenom)
             .offset(offset)
             .limit(limit)
