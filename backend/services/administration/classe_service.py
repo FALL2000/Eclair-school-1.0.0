@@ -3,6 +3,7 @@ from fastapi import HTTPException
 from repositories.administration.annee_repository import AnneeRepository
 from schemas.administration.classe_dto import ClasseCreateDTO, ClasseUpdateDTO
 from models.administration.classe import Classe
+from models.administration.niveau import Niveau
 from repositories.administration.classe_repository import ClasseRepository
 
 
@@ -36,8 +37,13 @@ class ClasseService:
             )
 
     def add_classe(self, classe_in: ClasseCreateDTO, niveau_id: int):
-        """Ajoute une classe en BD"""
+        """Ajoute une classe en BD dans un niveau existant"""
         try:
+            if self._session().get(Niveau, niveau_id) is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail={"error_code": "NIVEAU_NOT_FOUND", "message": "Niveau non trouvé"},
+                )
             self._check_code_exists(classe_in.code)
             classe_dict = classe_in.model_dump()
             classe_dict["id_niveau"] = niveau_id

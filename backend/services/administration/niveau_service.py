@@ -1,7 +1,9 @@
 from fastapi import HTTPException
 
 from schemas.administration.niveau_dto import NiveauCreateDTO, NiveauUpdateDTO
+from models.administration.cycle import Cycle
 from models.administration.niveau import Niveau
+from models.administration.serie import Serie
 from repositories.administration.niveau_repository import NiveauRepository
 from repositories.administration.annee_repository import AnneeRepository
 
@@ -36,8 +38,18 @@ class NiveauService:
             )
 
     def add_niveau(self, niveau_in: NiveauCreateDTO, cycle_id: int, serie_id: int | None):
-        """Ajoute un niveau en BD"""
+        """Ajoute un niveau en BD dans un cycle existant (série facultative, ex. 2nde C)"""
         try:
+            if self._session().get(Cycle, cycle_id) is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail={"error_code": "CYCLE_NOT_FOUND", "message": "Cycle non trouvé"},
+                )
+            if serie_id is not None and self._session().get(Serie, serie_id) is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail={"error_code": "SERIE_NOT_FOUND", "message": "Série non trouvée"},
+                )
             self._check_code_exists(niveau_in.code)
             niveau_dict = niveau_in.model_dump()
             niveau_dict["id_cycle"] = cycle_id

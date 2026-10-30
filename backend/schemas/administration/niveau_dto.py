@@ -11,7 +11,7 @@ class NiveauBase(SQLModel):
     libelle: str = Field(
         max_length=60, description="Libelle du niveau", nullable=False)
     montant_inscription: float = Field(
-        description="Montant de l'inscription pour le niveau", nullable=False)
+        ge=0, description="Montant de l'inscription pour le niveau", nullable=False)
 
 
 class NiveauCreateDTO(NiveauBase):
@@ -21,7 +21,7 @@ class NiveauCreateDTO(NiveauBase):
 class NiveauUpdateDTO(SQLModel):
     code: Optional[str] = None
     libelle: Optional[str] = None
-    montant_inscription: Optional[float] = None
+    montant_inscription: Optional[float] = Field(default=None, ge=0)
 
 
 class NiveauResponseDTO(NiveauBase):

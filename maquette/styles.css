@@ -528,3 +528,6 @@ table.dt { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 /* Export PDF de la liste des élèves (A4) */
 .paper.liste-eleves { font-size: 11.5px; }
 .paper.liste-eleves th, .paper.liste-eleves td { padding: 4px 6px; }
+/* Arbre du paramétrage : nœuds pliables */
+.tree-toggle { width: 26px; height: 26px; padding: 0; flex: none; }
+.tree-toggle-vide { display: inline-block; width: 26px; flex: none; }

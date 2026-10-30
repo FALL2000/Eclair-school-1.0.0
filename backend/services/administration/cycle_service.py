@@ -2,6 +2,7 @@ from fastapi import HTTPException
 
 from schemas.administration.cycle_dto import CycleCreateDTO, CycleUpdateDTO
 from models.administration.cycle import Cycle
+from models.administration.section import Section
 from repositories.administration.cycle_repository import CycleRepository
 from repositories.administration.annee_repository import AnneeRepository
 
@@ -36,8 +37,13 @@ class CycleService:
             )
 
     def add_cycle(self, cycle_in: CycleCreateDTO, section_id: int):
-        """Ajoute un cycle en BD"""
+        """Ajoute un cycle en BD dans une section existante"""
         try:
+            if self._session().get(Section, section_id) is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail={"error_code": "SECTION_NOT_FOUND", "message": "Section non trouvée"},
+                )
             self._check_code_exists(cycle_in.code)
             cycle_dict = cycle_in.model_dump()
             cycle_dict["id_section"] = section_id

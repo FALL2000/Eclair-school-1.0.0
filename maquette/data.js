@@ -29,6 +29,12 @@
     { id: 3, code: "FRANCO-2", libelle: "SECOND CYCLE", section: 1 },
     { id: 2, code: "ANGLO-1", libelle: "FIRST CYCLE", section: 2 },
   ];
+  // Séries (facultatives sur un niveau, ex. Seconde C)
+  const series = [
+    { id: 1, code: "A", libelle: "Série A" },
+    { id: 2, code: "C", libelle: "Série C" },
+    { id: 3, code: "D", libelle: "Série D" },
+  ];
   // montantInscription : montant de l'inscription du niveau (niveau.montant_inscription)
   const niveaux = [
     { id: 1, code: "6E", libelle: "Sixième", cycle: 1, montantInscription: 10000 },
@@ -356,7 +362,7 @@
   });
 
   window.DATA = {
-    ecole, sections, cycles, niveaux, classes, baremes, appreciations, groupes, matieres, trimestres,
+    ecole, sections, cycles, niveaux, classes, series, baremes, appreciations, groupes, matieres, trimestres,
     evaluations, dependances, decisions, eleves, notes, disciplines, tranches, reglements, enseignants, cours,
     catalogue, roles, utilisateurs, anciensEleves, inscriptions, heuresEnseignants, versementsSalaire, presencesEnseignants, appels,
     configuration: { isAppel: true, isAbsenceJustifieePayee: false },

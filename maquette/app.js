@@ -1924,16 +1924,139 @@
   }
 
   /* ---------------- Paramétrage (administration) ---------------- */
+  /* ---------------- Paramétrage : sections, cycles, niveaux, classes ----------------
+     POST /section/add ; /cycle/add?section_id= ; /niveau/add?cycle_id=&serie_id= ; /classe/add?niveau_id= ; PATCH /<type>/update/{id}
+     Le parent n'est pas modifiable (les DTO de modification n'ont que code, libellé et montant d'inscription) */
+  const STRUCT = {
+    section: { liste: () => D.sections, label: "adm.section", parent: null },
+    cycle: { liste: () => D.cycles, label: "adm.cycle", parent: "section" },
+    niveau: { liste: () => D.niveaux, label: "c.niveau", parent: "cycle" },
+    classe: { liste: () => D.classes, label: "c.classe", parent: "niveau" },
+    serie: { liste: () => D.series, label: "adm.serie", parent: null },
+  };
+  const ORDRE_STRUCT = ["section", "cycle", "niveau"];
+  // Section, cycle et niveau qui contiennent un élément (ou son parent direct)
+  function ancetres(type, x) {
+    const niveau = type === "classe" ? x.niveau : "";
+    const cycle = type === "niveau" ? x.cycle : niveau ? byId(D.niveaux, niveau).cycle : "";
+    const section = type === "cycle" ? x.section : cycle ? byId(D.cycles, cycle).section : "";
+    return { section: section || "", cycle: cycle || "", niveau: niveau || "" };
+  }
+  // Ouverture : depuis l'en-tête (parents à choisir en cascade), depuis le « + » d'une ligne (parents pré-remplis et verrouillés)
+  // ou en modification (parents affichés, non modifiables)
+  function ouvrirStructure(type, id, parent) {
+    const C = STRUCT[type];
+    const x = id ? byId(C.liste(), id) : { code: "", libelle: "", montantInscription: "", serie: "", [C.parent]: parent || "" };
+    S.st = { type, id, verrou: !!id || !!parent, ...ancetres(type, x), code: x.code, libelle: x.libelle, montant: x.montantInscription ?? "", serie: x.serie || "" };
+    dialogStructure();
+  }
+  function dialogStructure() {
+    const st = S.st, type = st.type, id = st.id, C = STRUCT[type];
+    const parents = C.parent ? ORDRE_STRUCT.slice(0, ORDRE_STRUCT.indexOf(C.parent) + 1) : [];
+    const choix = {
+      section: () => D.sections,
+      cycle: () => D.cycles.filter(c => c.section === st.section),
+      niveau: () => D.niveaux.filter(n => n.cycle === st.cycle),
+    };
+    const champParent = (k, i) => {
+      const inactif = st.verrou || (i > 0 && !st[parents[i - 1]]);
+      return `<div class="field"><label>${t(STRUCT[k].label)} *</label><select class="select" data-st="${k}" ${inactif ? "disabled" : ""}>${option("", t("c.choisir"), st[k])}${choix[k]().map(o => option(o.id, o.libelle, st[k])).join("")}</select></div>`;
+    };
+    const champ = (cle, label, valeur, type_ = "text", extra = "") => `<div class="field"><label for="st-${cle}">${t(label)} *</label><input class="input" id="st-${cle}" name="${cle}" type="${type_}" value="${esc(valeur)}" required ${extra}></div>`;
+    const titre = t(id ? "adm.modifierStruct" : "adm.ajouterStruct", { type: t(C.label).toLowerCase(), l: byId(C.liste(), id)?.libelle || "" });
+    dialog(titre, `<form id="form-structure" data-form="structure"><div class="stack">
+        ${parents.length ? `<div class="form-grid" style="grid-template-columns:repeat(${parents.length},minmax(0,1fr))">${parents.map(champParent).join("")}</div>
+          ${st.verrou ? `<div class="small muted" style="margin-top:-6px"><i class="pi pi-lock"></i> ${t(id ? "adm.parentsFixes" : "adm.parentsPreRemplis")}</div>` : ""}` : ""}
+        <div class="form-grid">
+        ${champ("code", "c.code", st.code, "text", 'maxlength="10"')}${champ("libelle", "c.libelle", st.libelle, "text", 'maxlength="60"')}
+        ${type === "niveau" ? `${champ("montant", "adm.montantInscription", st.montant, "number", 'min="0" step="any"')}
+          <div class="field"><label>${t("adm.serie")}</label><select class="select" id="st-serie" name="serie" ${id ? "disabled" : ""}>${option("", t("adm.aucuneSerie"), st.serie)}${D.series.map(s => option(s.id, s.libelle, st.serie)).join("")}</select></div>` : ""}
+      </div>${type === "niveau" && !id ? `<div class="small muted"><i class="pi pi-info-circle"></i> ${t("adm.aideNiveau")}</div>` : ""}<div id="st-erreur"></div></div></form>`,
+      `<button class="btn secondary" data-act="fermer">${t("c.annuler")}</button><button class="btn" type="submit" form="form-structure"><i class="pi pi-check"></i>${t("c.enregistrer")}</button>`);
+  }
+  // Changement d'un parent : on garde la saisie, on vide les niveaux inférieurs puis on réaffiche
+  function cascadeStructure(k, valeur) {
+    ["code", "libelle", "montant", "serie"].forEach(c => { const el = document.getElementById("st-" + c); if (el) S.st[c] = el.value; });
+    S.st[k] = valeur ? Number(valeur) : "";
+    ORDRE_STRUCT.slice(ORDRE_STRUCT.indexOf(k) + 1).forEach(c => { S.st[c] = ""; });
+    dialogStructure();
+  }
+  function enregistrerStructure(form) {
+    const st = S.st, type = st.type, id = st.id, C = STRUCT[type], liste = C.liste();
+    const d = Object.fromEntries(new FormData(form).entries());
+    const v = { code: (d.code || "").trim().toUpperCase(), libelle: (d.libelle || "").trim() };
+    if (type === "niveau") v.montantInscription = Number(d.montant);
+    const manquant = !id && C.parent ? ORDRE_STRUCT.slice(0, ORDRE_STRUCT.indexOf(C.parent) + 1).find(k => !st[k]) : null;
+    // Mêmes contrôles que le backend : parent existant (404), champs obligatoires, code unique (409 DUPLICATION_CODE), montant d'inscription >= 0
+    const erreur = manquant ? t("adm.errParent", { p: t(STRUCT[manquant].label).toLowerCase() })
+      : !v.code || !v.libelle ? t("adm.errChamps")
+      : type === "niveau" && !(d.montant !== "" && v.montantInscription >= 0) ? t("adm.errMontant")
+      : liste.some(x => x.id !== id && x.code.toLowerCase() === v.code.toLowerCase()) ? t("adm.errCode", { c: v.code })
+      : null;
+    if (erreur) {
+      document.getElementById("st-erreur").innerHTML = `<div class="message danger"><i class="pi pi-times-circle"></i><div class="small">${erreur}</div></div>`;
+      return;
+    }
+    if (id) Object.assign(byId(liste, id), v);
+    else {
+      const nouveau = { id: Math.max(0, ...liste.map(x => x.id)) + 1, ...v };
+      if (C.parent) nouveau[C.parent] = st[C.parent];
+      if (type === "niveau") nouveau.serie = d.serie ? Number(d.serie) : null;
+      if (type === "classe") nouveau.effectif = 0;
+      liste.push(nouveau);
+      if (S.plies) ORDRE_STRUCT.forEach(k => { if (st[k]) S.plies.delete(`${k}:${st[k]}`); });
+    }
+    fermer(); render();
+    toast("success", t(id ? "adm.structModifie" : "adm.structAjoute", { type: t(C.label) }), `${v.libelle} · ${v.code}`);
+  }
+
   function ecranAdministration() {
     const tab = S.tab.admin;
-    const onglets = [["structure", "adm.tStructure"], ["matieres", "adm.tMatieres"], ["baremes", "adm.tBaremes"], ["decisions", "adm.tDecisions"], ["annees", "adm.tAnnees"], ["configuration", "adm.tConfiguration"]];
+    const onglets = [["structure", "adm.tStructure"], ["series", "adm.tSeries"], ["matieres", "adm.tMatieres"], ["baremes", "adm.tBaremes"], ["decisions", "adm.tDecisions"], ["annees", "adm.tAnnees"], ["configuration", "adm.tConfiguration"]];
     const actions = (code) => `<td class="right">${can(code + ":modifier") ? `<button class="btn text icon sm" title="${t("c.modifier")}"><i class="pi pi-pencil"></i></button>` : ""}${can(code + ":supprimer") ? `<button class="btn text icon sm" data-act="confirmer-suppression" title="${t("c.supprimer")}"><i class="pi pi-trash" style="color:var(--danger)"></i></button>` : ""}</td>`;
     let corps = "";
     if (tab === "structure") {
-      corps = `<div class="card"><div class="card-head"><h2>${t("adm.structure")}</h2>${can("classe:ajouter") ? `<button class="btn sm"><i class="pi pi-plus"></i>${t("adm.ajouterClasse")}</button>` : ""}</div>
-        <div class="table-wrap"><table class="dt"><thead><tr><th>${t("adm.section")} / ${t("adm.cycle")} / ${t("c.niveau")}</th><th>${t("c.classe")}</th><th class="num">${t("c.effectif")}</th><th></th></tr></thead><tbody>
-        ${D.sections.map(sec => `<tr class="group"><td colspan="4"><i class="pi pi-sitemap"></i> ${esc(sec.libelle)}</td></tr>` + D.cycles.filter(c => c.section === sec.id).map(cy =>
-          D.niveaux.filter(n => n.cycle === cy.id).map(n => D.classes.filter(c => c.niveau === n.id).map((c, i) => `<tr><td>${i === 0 ? `<span class="muted small">${esc(cy.libelle)} ›</span> <b>${esc(n.libelle)}</b>` : ""}</td><td>${esc(c.libelle)} <span class="mono small muted">${esc(c.code)}</span></td><td class="num">${c.effectif}</td>${actions("classe")}</tr>`).join("")).join("")).join("")).join("")}
+      // Arbre section > cycle > niveau > classe : chaque ligne propose d'ajouter un élément de niveau inférieur
+      const ajout = (type, parent) => can(type + ":ajouter") ? `<button class="btn text sm" data-act="struct-ajouter" data-v="${type}|${parent}"><i class="pi pi-plus"></i>${t("adm.aj." + type)}</button>` : "";
+      const gestion = (type, id) => `${can(type + ":modifier") ? `<button class="btn text icon sm" data-act="struct-modifier" data-v="${type}|${id}" title="${t("c.modifier")}"><i class="pi pi-pencil"></i></button>` : ""}${can(type + ":supprimer") ? `<button class="btn text icon sm" data-act="confirmer-suppression" title="${t("c.supprimer")}"><i class="pi pi-trash" style="color:var(--danger)"></i></button>` : ""}`;
+      // Nœuds pliables : section, cycle et niveau (S.plies contient les clés "type:id" des nœuds repliés)
+      const plies = S.plies || (S.plies = new Set());
+      const ouvert = (type, id) => !plies.has(`${type}:${id}`);
+      const noeud = (type, id, nbEnfants) => nbEnfants
+        ? `<button class="btn text icon sm tree-toggle" data-act="struct-plier" data-v="${type}:${id}" title="${t(ouvert(type, id) ? "adm.plier" : "adm.deplier")}" aria-expanded="${ouvert(type, id)}"><i class="pi ${ouvert(type, id) ? "pi-chevron-down" : "pi-chevron-right"}"></i></button>`
+        : `<span class="tree-toggle-vide"></span>`;
+      const ligne = (type, x, niveau, detail, enfant, nbEnfants) => `<tr class="struct-${type}"><td><div style="padding-left:${niveau * 22}px" class="row">${type === "classe" ? `<span class="tree-toggle-vide"></span>` : noeud(type, x.id, nbEnfants)}<span class="tag ${type === "classe" ? "secondary" : "info"}" style="min-width:58px;justify-content:center">${t(STRUCT[type].label)}</span><b>${esc(x.libelle)}</b></div></td>
+        <td class="mono small">${esc(x.code)}</td><td class="small">${detail}</td><td class="right" style="white-space:nowrap">${enfant || ""}${gestion(type, x.id)}</td></tr>`;
+      const vide = (niveau, cle) => `<tr><td colspan="4"><div class="small muted" style="padding-left:${niveau * 22 + 4}px"><i class="pi pi-info-circle"></i> ${t(cle)}</div></td></tr>`;
+      const arbre = D.sections.map(sec => {
+        const cycles = D.cycles.filter(c => c.section === sec.id);
+        return `<tr class="group"><td><div class="row">${noeud("section", sec.id, cycles.length)}<i class="pi pi-sitemap"></i> ${esc(sec.libelle)}</div></td><td class="mono">${esc(sec.code)}</td><td style="text-transform:none;letter-spacing:0;font-weight:500">${t("adm.nbCycles", { n: cycles.length })}</td><td class="right" style="white-space:nowrap;text-transform:none;letter-spacing:0">${ajout("cycle", sec.id)}${gestion("section", sec.id)}</td></tr>`
+          + (!ouvert("section", sec.id) ? "" : cycles.length ? cycles.map(cy => {
+            const niveaux = D.niveaux.filter(n => n.cycle === cy.id);
+            return ligne("cycle", cy, 0, t("adm.nbNiveaux", { n: niveaux.length }), ajout("niveau", cy.id), niveaux.length)
+              + (!ouvert("cycle", cy.id) ? "" : niveaux.length ? niveaux.map(n => {
+                const classes = D.classes.filter(c => c.niveau === n.id);
+                return ligne("niveau", n, 1, `${t("adm.inscriptionDe", { m: fcfa(n.montantInscription) })}${n.serie ? ` · ${esc(byId(D.series, n.serie).libelle)}` : ""} · ${t("adm.nbClasses", { n: classes.length })}`, ajout("classe", n.id), classes.length)
+                  + (!ouvert("niveau", n.id) ? "" : classes.length ? classes.map(c => ligne("classe", c, 2, t("adm.effectifDe", { n: c.effectif }))).join("") : vide(2, "adm.aucuneClasse"));
+              }).join("") : vide(1, "adm.aucunNiveau"));
+          }).join("") : vide(0, "adm.aucunCycle"));
+      }).join("");
+      corps = `<div class="card"><div class="card-head"><div><h2>${t("adm.structure")}</h2><div class="small muted">${t("adm.structureAide")}</div></div>
+          <div class="row">${["section", "cycle", "niveau", "classe"].filter(x => can(x + ":ajouter")).map((x, i) => `<button class="btn ${i ? "secondary" : ""} sm" data-act="struct-ajouter" data-v="${x}|"><i class="pi pi-plus"></i>${t("adm.aj." + x)}</button>`).join("")}</div></div>
+        <div class="card-body row" style="padding-top:10px;padding-bottom:10px;border-top:1px solid var(--border)">
+          <button class="btn text sm" data-act="struct-tout" data-v="deplier"><i class="pi pi-angle-double-down"></i>${t("adm.toutDeplier")}</button>
+          <button class="btn text sm" data-act="struct-tout" data-v="niveaux"><i class="pi pi-list"></i>${t("adm.jusquAuxNiveaux")}</button>
+          <button class="btn text sm" data-act="struct-tout" data-v="plier"><i class="pi pi-angle-double-right"></i>${t("adm.toutPlier")}</button></div>
+        <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.libelle")}</th><th>${t("c.code")}</th><th>${t("adm.details")}</th><th></th></tr></thead><tbody>${arbre}</tbody></table></div></div>`;
+    } else if (tab === "series") {
+      // GET /serie/all ; POST /serie/add ; PATCH /serie/update/{id} ; DELETE /serie/delete/{id} (409 CANNOT_DELETE si un niveau l'utilise)
+      corps = `<div class="card"><div class="card-head"><div><h2>${t("adm.series")}</h2><div class="small muted">${t("adm.seriesAide")}</div></div>
+          ${can("serie:ajouter") ? `<button class="btn sm" data-act="struct-ajouter" data-v="serie|"><i class="pi pi-plus"></i>${t("adm.aj.serie")}</button>` : ""}</div>
+        <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.code")}</th><th>${t("c.libelle")}</th><th>${t("adm.niveauxSerie")}</th><th></th></tr></thead><tbody>
+        ${D.series.length ? D.series.map(x => { const niveaux = D.niveaux.filter(n => n.serie === x.id);
+          return `<tr><td class="mono">${esc(x.code)}</td><td><b>${esc(x.libelle)}</b></td><td>${niveaux.length ? niveaux.map(n => tag("info", n.libelle)).join(" ") : `<span class="muted">—</span>`}</td>
+          <td class="right" style="white-space:nowrap">${can("serie:modifier") ? `<button class="btn text icon sm" data-act="struct-modifier" data-v="serie|${x.id}" title="${t("c.modifier")}"><i class="pi pi-pencil"></i></button>` : ""}${can("serie:supprimer") ? `<button class="btn text icon sm" data-act="confirmer-suppression" ${niveaux.length ? `disabled title="${t("adm.serieUtilisee")}"` : `title="${t("c.supprimer")}"`}><i class="pi pi-trash" style="color:var(--danger)"></i></button>` : ""}</td></tr>`; }).join("")
+          : `<tr><td colspan="4"><div class="empty">${t("adm.aucuneSerieListe")}</div></td></tr>`}
         </tbody></table></div></div>`;
     } else if (tab === "matieres") {
       corps = `<div class="card"><div class="card-head"><div class="filters"><div class="field"><label>${t("c.niveau")}</label><select class="select">${D.niveaux.map(n => option(n.id, n.libelle, 5)).join("")}</select></div></div>${can("matiere_evalue:ajouter") ? `<button class="btn sm"><i class="pi pi-plus"></i>${t("adm.ajouterMatiere")}</button>` : ""}</div>
@@ -2212,6 +2335,14 @@
     historique: v => dialogHistorique(v),
     "recu-reglement": v => recuReglement(v),
     "ajouter-tranche": () => dialogTranche(),
+    "struct-ajouter": v => { const [type, parent] = v.split("|"); ouvrirStructure(type, null, parent ? Number(parent) : ""); },
+    "struct-plier": v => { const p = S.plies || (S.plies = new Set()); p.has(v) ? p.delete(v) : p.add(v); render(); },
+    // Tout déplier / tout plier (sections seules visibles) / déplier jusqu'aux niveaux (classes repliées)
+    "struct-tout": v => {
+      S.plies = new Set(v === "plier" ? D.sections.map(x => `section:${x.id}`) : v === "niveaux" ? D.niveaux.map(x => `niveau:${x.id}`) : []);
+      render();
+    },
+    "struct-modifier": v => { const [type, id] = v.split("|"); ouvrirStructure(type, Number(id)); },
     "modifier-tranche": v => dialogTranche(Number(v)),
     "annuler-reglement": v => { const r = D.reglements.find(x => x.id === Number(v)); r.statut = "annule"; dialogHistorique(r.eleve); render(); dialogHistorique(r.eleve); toast("warn", t("sco.annuleOk"), fcfa(r.montant)); },
     "bareme-sel": v => { S.f.baremeSel = Number(v); render(); },
@@ -2363,6 +2494,7 @@
       }
       return;
     }
+    if (el.dataset.st) { cascadeStructure(el.dataset.st, el.value); return; }
     if (el.id === "mp-moyen") {
       const compte = avecCompte(el.value);
       document.querySelectorAll("[data-compte]").forEach(f => { f.style.display = compte ? "" : "none"; });
@@ -2440,6 +2572,7 @@
     if (!form) return;
     ev.preventDefault();
     if (form.dataset.form === "tranche") { enregistrerTranche(form); return; }
+    if (form.dataset.form === "structure") { enregistrerStructure(form); return; }
     if (form.dataset.form === "filtre-hreg") {
       const du = document.getElementById("hreg-du").value, au = document.getElementById("hreg-au").value, q = document.getElementById("hreg-q").value;
       if (du && au && du > au) { document.getElementById("hreg-erreur").innerHTML = `<div class="message danger small"><i class="pi pi-times-circle"></i>${t("hist.errDates")}</div>`; return; }
