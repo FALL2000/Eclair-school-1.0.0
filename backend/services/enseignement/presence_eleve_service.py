@@ -39,7 +39,19 @@ class PresenceEleveService:
                 },
             )
 
+    def _check_discipline_geree(self):
+        """Sans gestion de la discipline, il n'y a pas d'appel des eleves"""
+        if not self.configuration_repository.is_discipline_geree():
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error_code": "DISCIPLINE_NON_GEREE",
+                    "message": "La discipline n'est pas gérée par l'établissement (configuration)",
+                },
+            )
+
     def _check_appel_actif(self):
+        self._check_discipline_geree()
         configurations = self.configuration_repository.findAll()
         if not configurations:
             raise HTTPException(
@@ -113,6 +125,7 @@ class PresenceEleveService:
     ) -> list[PresenceEleveResponseDTO]:
         """Modifie en masse les présences des élèves"""
         try:
+            self._check_discipline_geree()
             for item in data.presences:
                 db_presence = self.presence_eleve_repository.findOne(item.id, load_relations=False)
                 self._check_presence_exists(db_presence)

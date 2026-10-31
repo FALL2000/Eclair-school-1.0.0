@@ -42,6 +42,7 @@
       presence: { cours: 0, date: AUJOURDHUI },
       roleSel: 3,
       baremeSel: 1,
+      matEv: { niveau: 5 }, // matières évaluées : niveau affiché
     },
     insc: { etape: 1, type: "nouveau", niveau: "", classe: "", redoublant: false },
     appel: {},
@@ -355,13 +356,13 @@
     { g: "nav.g.enseignement", items: [
       { r: "enseignants", i: "pi-id-card", l: "nav.enseignants", p: "enseignant:consulter" },
       { r: "emploi-du-temps", i: "pi-calendar", l: "nav.edt", p: "cours:consulter" },
-      { r: "presences", i: "pi-check-square", l: "nav.presences", p: ["presence_eleve:consulter", "presence_enseignant:consulter"] },
+      { r: "presences", i: "pi-check-square", l: "nav.presences", p: ["presence_eleve:consulter", "presence_enseignant:consulter"], si: () => disciplineGeree() || can("presence_enseignant:consulter") },
       { r: "salaires", i: "pi-money-bill", l: "nav.salaires", p: "salaire:consulter" },
     ] },
     { g: "nav.g.evaluations", items: [
       { r: "evaluations", i: "pi-list", l: "nav.evaluations", p: "evaluation:consulter" },
       { r: "notes", i: "pi-pencil", l: "nav.notes", p: "notation:consulter" },
-      { r: "discipline", i: "pi-exclamation-triangle", l: "nav.discipline", p: "discipline_eleve:consulter" },
+      { r: "discipline", i: "pi-exclamation-triangle", l: "nav.discipline", p: "discipline_eleve:consulter", si: () => disciplineGeree() },
       { r: "bulletins", i: "pi-file", l: "nav.bulletins", p: "bulletin:generer" },
     ] },
     { g: "nav.g.scolarite", items: [{ r: "scolarite", i: "pi-wallet", l: "nav.scolarite", p: "reglement:consulter" }] },
@@ -371,6 +372,10 @@
     ] },
   ];
   const tousItems = () => MENU.flatMap(g => g.items);
+  // Discipline gérée ? Toujours au secondaire ; au primaire selon la configuration (is_discipline_manage).
+  // Non gérée : pas d'appel des élèves, pas de discipline enregistrée, pas de partie discipline au bulletin.
+  const estPrimaire = () => D.ecole.typeSchool === "education_base";
+  const disciplineGeree = () => !estPrimaire() || D.configuration.isDisciplineManage !== false;
 
   /* ---------------- Toast & dialog ---------------- */
   function toast(sev, titre, message) {
@@ -380,6 +385,32 @@
     el.innerHTML = `<i class="pi ${icones[sev]}"></i><div><b>${esc(titre)}</b><span class="small muted">${esc(message || "")}</span></div>`;
     document.getElementById("toasts").appendChild(el);
     setTimeout(() => el.remove(), 3800);
+  }
+  /* Petit écran : les tableaux .dt s'affichent en cartes (CSS @media max-width 640px).
+     Chaque cellule reçoit le libellé de sa colonne (data-label) ; la colonne « titre » (élève, enseignant…)
+     passe en tête de carte, la colonne « # » est masquée et la colonne sans en-tête (boutons) va en pied de carte. */
+  const COLONNES_TITRE = ["c.eleve", "ens.enseignant", "usr.utilisateur", "c.matiere", "c.evaluation", "usr.module"];
+  function tableauxEnCartes(racine) {
+    racine.querySelectorAll("table.dt").forEach(table => {
+      const entetes = [...table.querySelectorAll("thead tr:last-child th")].map(th => th.textContent.replace(/\s+/g, " ").trim());
+      const titres = COLONNES_TITRE.map(k => t(k));
+      let iTitre = entetes.findIndex(h => titres.includes(h));
+      if (iTitre < 0) iTitre = Math.max(0, entetes.findIndex(h => h && h !== "#" && h !== "N°"));
+      table.classList.add("dt-cartes");
+      table.querySelectorAll("tbody tr").forEach(tr => {
+        const cellules = [...tr.children];
+        if (cellules.length === 1 && cellules[0].colSpan > 1) { tr.classList.add("ligne-pleine"); return; }
+        let col = 0;
+        cellules.forEach(td => {
+          const h = entetes[col];
+          if (h) td.dataset.label = h;
+          if (col === iTitre) td.classList.add("cell-titre");
+          else if (h === "#" || h === "N°") td.classList.add("cell-index");
+          else if (entetes.length && !h) td.classList.add("cell-actions");
+          col += td.colSpan || 1;
+        });
+      });
+    });
   }
   function dialog(titre, corps, pied, large) {
     document.getElementById("dialog-root").innerHTML = `
@@ -391,6 +422,7 @@
         </div>
       </div>`;
     ameliorerSelects(document.getElementById("dialog-root"));
+    tableauxEnCartes(document.getElementById("dialog-root"));
   }
   const fermer = () => { fermerSelect(); document.getElementById("dialog-root").innerHTML = ""; };
 
@@ -494,7 +526,7 @@
     const u = utilisateurCourant();
     const item = tousItems().find(i => i.r === route);
     const menu = MENU.map(g => {
-      const items = g.items.filter(i => can(i.p));
+      const items = g.items.filter(i => can(i.p) && (!i.si || i.si()));
       if (!items.length) return "";
       return `<div class="menu-group"><div class="menu-group-title">${t(g.g)}</div>${items.map(i => `
         <div class="menu-item ${i.r === route ? "active" : ""}" data-go="${i.r}"><i class="pi ${i.i}"></i>${t(i.l)}</div>`).join("")}</div>`;
@@ -638,7 +670,7 @@
     const moyennesClasses = [["6e A", 11.42], ["6e B", 10.87], ["5e A", 11.9], ["4e A", 10.31], ["3e A", 12.04], ["2nde C", res.stats.moyenne], ["1ère D", 11.15], ["Tle C", 12.61]];
     const maxBar = 20;
     const derniers = [...D.reglements].filter(r => r.statut === "valide").sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
-    const aSuivre = res.bulletins.filter(b => (b.moy != null && b.moy < 10) || b.discipline.total >= 8).slice(0, 4);
+    const aSuivre = res.bulletins.filter(b => (b.moy != null && b.moy < 10) || (disciplineGeree() && b.discipline.total >= 8)).slice(0, 4);
     const actions = [
       can("eleve:inscrire") ? `<button class="btn" data-go="inscription"><i class="pi pi-user-plus"></i>${t("dash.aInscrire")}</button>` : "",
       can("notation:ajouter") ? `<button class="btn outlined" data-go="notes"><i class="pi pi-pencil"></i>${t("dash.aNotes")}</button>` : "",
@@ -651,7 +683,7 @@
         ${carte("pi-users", "", t("dash.eleves"), fmtInt(effectif), t("dash.elevesSous", { n: D.classes.length }))}
         ${carte("pi-chart-line", "success", t("dash.moyenne"), fmt(res.stats.moyenne), t("dash.moyenneSous", { taux: fmt(res.stats.taux) }))}
         ${can("reglement:consulter") ? carte("pi-wallet", "warn", t("dash.recouvrement"), Math.round(encaisse * 100 / attendu) + " %", t("dash.recouvrementSous", { m: fcfa(encaisse) })) : carte("pi-list", "warn", t("dash.evaluations"), D.evaluations.length, t("dash.evaluationsSous"))}
-        ${carte("pi-clock", "danger", t("dash.absences"), fmtInt(heures) + " h", t("dash.absencesSous"))}
+        ${disciplineGeree() ? carte("pi-clock", "danger", t("dash.absences"), fmtInt(heures) + " h", t("dash.absencesSous")) : ""}
       </div>
       <div class="grid grid-main-side" style="margin-top:16px">
         <div class="card">
@@ -677,8 +709,8 @@
         </div>` : ""}
         ${can("eleve:consulter") ? `<div class="card">
           <div class="card-head"><h2>${t("dash.aSuivre")}</h2><span class="tag warn">2nde C</span></div>
-          <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.eleve")}</th><th class="num">${t("bul.moyenne")}</th><th class="num">${t("disc.heures")}</th><th>${t("c.motif")}</th></tr></thead><tbody>
-            ${aSuivre.map(b => `<tr class="clickable" data-go="eleves/${b.e.id}"><td><div class="person"><span class="avatar">${esc(initiales(b.e.prenom, b.e.nom))}</span>${esc(b.e.nom)} ${esc(b.e.prenom)}</div></td><td class="num">${fmt(b.moy)}</td><td class="num">${b.discipline.total} h</td><td>${b.moy < 10 ? tag("danger", t("dash.motifMoyenne")) : ""} ${b.discipline.total >= 8 ? tag("warn", t("dash.motifAbsences")) : ""}</td></tr>`).join("")}
+          <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.eleve")}</th><th class="num">${t("bul.moyenne")}</th>${disciplineGeree() ? `<th class="num">${t("disc.heures")}</th>` : ""}<th>${t("c.motif")}</th></tr></thead><tbody>
+            ${aSuivre.map(b => `<tr class="clickable" data-go="eleves/${b.e.id}"><td><div class="person"><span class="avatar">${esc(initiales(b.e.prenom, b.e.nom))}</span>${esc(b.e.nom)} ${esc(b.e.prenom)}</div></td><td class="num">${fmt(b.moy)}</td>${disciplineGeree() ? `<td class="num">${b.discipline.total} h</td>` : ""}<td>${b.moy < 10 ? tag("danger", t("dash.motifMoyenne")) : ""} ${b.discipline.total >= 8 ? tag("warn", t("dash.motifAbsences")) : ""}</td></tr>`).join("")}
           </tbody></table></div>
         </div>` : ""}
       </div>`;
@@ -780,10 +812,10 @@
   function ecranFicheEleve(id) {
     const e = eleve(id);
     if (!e) return accesRefuse();
-    const tab = S.tab.eleve;
+    const tab = S.tab.eleve === "discipline" && !disciplineGeree() ? "infos" : S.tab.eleve;
     const res = calculerBulletins(e.classe, { type: "trimestre", id: 1 });
     const b = res.bulletins.find(x => x.e.id === e.id);
-    const onglets = [["infos", "eleve.tInfos"], ["notes", "eleve.tNotes"], ["scolarite", "eleve.tScolarite"], ["discipline", "eleve.tDiscipline"]];
+    const onglets = [["infos", "eleve.tInfos"], ["notes", "eleve.tNotes"], ["scolarite", "eleve.tScolarite"], ["discipline", "eleve.tDiscipline"]].filter(([k]) => k !== "discipline" || disciplineGeree());
     let corps = "";
     if (!estInscrit(e) && tab !== "infos") {
       corps = `<div class="empty"><i class="pi pi-info-circle" style="font-size:28px"></i><p>${t("eleve.nonInscritInfo", { c: esc(classe(e.classe).libelle) })}</p></div>`;
@@ -976,7 +1008,7 @@
   }
 
   /* ---------------- Enseignants ---------------- */
-  const MATIERES_ENSEIGNEES = () => [...new Set(D.matieres.map(m => m.libelle))].sort((a, b) => a.localeCompare(b));
+  const MATIERES_ENSEIGNEES = () => [...new Set(D.matieresEns.map(m => m.libelle))].sort((a, b) => a.localeCompare(b));
   // Simule GET /enseignant/all?q=&matiere=&page=&page_size= (filtre et pagination faits par le backend)
   function pageEnseignants() {
     const E = S.ens, f = E.applique;
@@ -1343,8 +1375,8 @@
 
   /* ---------------- Présences (appel) ---------------- */
   // Onglets de l'écran Appel : élèves (appel pendant un cours) et enseignants (présence aux cours, base des salaires horaires)
-  const ongletPresence = () => S.tab.pres === "enseignants" && can("presence_enseignant:consulter") || !can("presence_eleve:consulter") ? "enseignants" : "eleves";
-  const ongletsPresence = () => can("presence_eleve:consulter") && can("presence_enseignant:consulter")
+  const ongletPresence = () => !disciplineGeree() || S.tab.pres === "enseignants" && can("presence_enseignant:consulter") || !can("presence_eleve:consulter") ? "enseignants" : "eleves";
+  const ongletsPresence = () => disciplineGeree() && can("presence_eleve:consulter") && can("presence_enseignant:consulter")
     ? `<div class="tabs" style="margin-bottom:16px">${[["eleves", "pres.tEleves", "pi-users"], ["enseignants", "pres.tEnseignants", "pi-id-card"]]
       .map(([k, l, i]) => `<div class="tab ${ongletPresence() === k ? "on" : ""}" data-tab="pres" data-v="${k}"><i class="pi ${i}"></i> ${t(l)}</div>`).join("")}</div>` : "";
   function ecranPresences() {
@@ -1525,15 +1557,19 @@
       </div></div></div>
       <div class="message ${appel ? "" : "warn"}" style="margin-bottom:16px"><i class="pi pi-info-circle"></i><div class="small">${t(appel ? "disc.infoAppel" : "disc.infoManuel")}</div></div>
       ${estAffiche("discipline") && eleves.length ? `<div class="card"><div class="card-head"><h2>${esc(evaluation(f.evaluation).libelle)} · ${esc(classe(S.sel.classe).libelle)}</h2>
-        ${appel && can("discipline_eleve:calculer") ? `<button class="btn" data-act="calculer-discipline"><i class="pi pi-calculator"></i>${t("disc.calculer")}</button>` : ""}</div>
+        ${appel && discEnregistre && can("discipline_eleve:calculer") ? `<button class="btn outlined" data-act="calculer-discipline"><i class="pi pi-refresh"></i>${t("disc.recalculer")}</button>` : ""}</div>
       ${!appel ? etatSaisie(discEnregistre, discEdition) : ""}
-      <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.eleve")}</th><th class="num">${t("disc.nonJustifiees")}</th><th class="num">${t("disc.justifiees")}</th><th class="num">${t("disc.total")}</th><th>${t("disc.decision")}</th></tr></thead><tbody>
+      ${appel && !discEnregistre
+        // Appel activé mais heures jamais calculées pour cette évaluation : on propose le premier calcul
+        ? `<div class="empty"><i class="pi pi-calculator" style="font-size:28px"></i><p><b>${t("disc.pasCalcule")}</b></p><p class="small muted">${t("disc.pasCalculeTexte")}</p>
+          ${can("discipline_eleve:calculer") ? `<button class="btn" data-act="calculer-discipline" style="margin-top:8px"><i class="pi pi-calculator"></i>${t("disc.calculer")}</button>` : `<p class="small muted">${t("disc.calculNonAutorise")}</p>`}</div></div>`
+        : `<div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.eleve")}</th><th class="num">${t("disc.nonJustifiees")}</th><th class="num">${t("disc.justifiees")}</th><th class="num">${t("disc.total")}</th><th>${t("disc.decision")}</th></tr></thead><tbody>
       ${eleves.map(e => { const d = discipline(e.id, [Number(f.evaluation)]); const saisie = discBrouillon[e.id] || {}, base = D.disciplines[f.evaluation]?.[e.id];
         const valeur = k => saisie[k] ?? (base ? base[k === "nj" ? "nonJustifie" : "justifie"] : "");
         const champ = (v, k) => appel ? `<b>${v}</b>` : `<input class="input note" inputmode="numeric" data-disc="${e.id}|${k}" value="${valeur(k)}" ${discEdition ? "" : "disabled"}>`;
         return `<tr><td><div class="person"><span class="avatar">${esc(initiales(e.prenom, e.nom))}</span>${esc(e.nom)} ${esc(e.prenom)}</div></td><td class="num">${champ(d.nj)}</td><td class="num">${champ(d.j)}</td><td class="num"><b>${d.total} h</b></td><td>${d.decision ? tag(d.total > 10 ? "danger" : d.total > 5 ? "warn" : "success", d.decision) : "—"}</td></tr>`; }).join("")}
       </tbody></table></div>
-      ${!appel ? piedSaisie(discCle, discEnregistre, { peutAjouter: can("discipline_eleve:ajouter"), peutModifier: can("discipline_eleve:modifier"), action: "enregistrer-discipline", libelle: "c.enregistrer" }) : ""}</div>` : zoneVide("discipline")}`;
+      ${!appel ? piedSaisie(discCle, discEnregistre, { peutAjouter: can("discipline_eleve:ajouter"), peutModifier: can("discipline_eleve:modifier"), action: "enregistrer-discipline", libelle: "c.enregistrer" }) : ""}</div>`}` : zoneVide("discipline")}`;
   }
 
   /* ---------------- Bulletins ---------------- */
@@ -1570,21 +1606,21 @@
         ${carte(t("bul.ecartType"), fmt(s.ecart))}${carte(t("bul.mediane"), fmt(s.mediane))}${carte(t("bul.tauxReussite"), fmt(s.taux) + " %")}
         ${res.distinction ? carte(t("bul.tableauHonneur"), res.honneur, "warn") : ""}
       </div>
-      <div class="grid grid-3" style="margin-top:16px">
+      <div class="grid ${f.type === "annuel" || disciplineGeree() ? "grid-3" : "grid-2"}" style="margin-top:16px">
         <div class="card"><div class="card-head"><h2>${t("bul.repartition")}</h2></div><div class="card-body"><div class="bars" style="height:140px">${res.repartition.map(r => `<div class="bar"><b>${r.n}</b><div style="height:${r.n / maxRep * 100}%"></div><small>${r.l}</small></div>`).join("")}</div></div></div>
         <div class="card"><div class="card-head"><h2>${t("bul.parGenre")}</h2></div><div class="card-body stack" style="gap:14px">${res.parGenre.map(g => `<div><div class="row-between"><b>${t(g.g === "F" ? "c.filles" : "c.garcons")}</b><span class="small muted">${g.effectif} ${t("c.eleves")} · ${t("bul.moyenne")} ${fmt(g.moyenne)}</span></div><div class="progress success" style="margin-top:6px"><div style="width:${g.taux || 0}%"></div></div><div class="small muted" style="margin-top:4px">${t("bul.reussite")} : ${g.taux == null ? "—" : fmt(g.taux) + " %"}</div></div>`).join("")}</div></div>
-        <div class="card"><div class="card-head"><h2>${f.type === "annuel" ? t("bul.decisionsFinales") : t("bul.discipline")}</h2></div><div class="card-body stack" style="gap:10px">
+        ${f.type === "annuel" || disciplineGeree() ? `<div class="card"><div class="card-head"><h2>${f.type === "annuel" ? t("bul.decisionsFinales") : t("bul.discipline")}</h2></div><div class="card-body stack" style="gap:10px">
           ${f.type === "annuel" ? res.decisionsFinales.map(d => `<div class="row-between"><span>${esc(d.d)}</span><b>${d.n}</b></div>`).join("")
             : `<div class="row-between"><span>${t("disc.totalNonJustifiees")}</span><b>${res.bulletins.reduce((x, b) => x + b.discipline.nj, 0)} h</b></div><div class="row-between"><span>${t("disc.moyenneNonJustifieesParEleve")}</span><b>${fmt(res.bulletins.reduce((x, b) => x + b.discipline.nj, 0) / res.bulletins.length)} h</b></div>
                ${D.decisions.map(d => ({ d: d.libelle, n: res.bulletins.filter(b => b.discipline.decision === d.libelle).length })).filter(x => x.n).map(x => `<div class="row-between"><span>${esc(x.d)}</span>${tag("secondary", x.n)}</div>`).join("")}`}
-        </div></div>
+        </div></div>` : ""}
       </div>
       <div class="card" style="margin-top:16px"><div class="card-head"><h2>${t("bul.classement")} · ${esc(libellePeriode || "")}</h2><span class="small muted">${t("bul.seuil")} : ${res.seuil}/20</span></div>
-      <div class="table-wrap"><table class="dt"><thead><tr><th>${t("bul.rang")}</th><th>${t("c.eleve")}</th><th class="num">${t("bul.moyenne")}</th><th>${t("bul.appreciation")}</th>${f.type === "annuel" ? `<th>${t("bul.moyTrimestres")}</th><th>${t("bul.decision")}</th>` : ""}<th>${t("bul.distinction")}</th><th class="num">${t("disc.heures")}</th><th></th></tr></thead><tbody>
+      <div class="table-wrap"><table class="dt"><thead><tr><th>${t("bul.rang")}</th><th>${t("c.eleve")}</th><th class="num">${t("bul.moyenne")}</th><th>${t("bul.appreciation")}</th>${f.type === "annuel" ? `<th>${t("bul.moyTrimestres")}</th><th>${t("bul.decision")}</th>` : ""}<th>${t("bul.distinction")}</th>${disciplineGeree() ? `<th class="num">${t("disc.heures")}</th>` : ""}<th></th></tr></thead><tbody>
       ${res.bulletins.map(b => `<tr><td><b>${libelleRang(b.rang, b.e.genre)}</b></td><td><div class="person"><span class="avatar">${esc(initiales(b.e.prenom, b.e.nom))}</span>${esc(b.e.nom)} ${esc(b.e.prenom)}</div></td>
         <td class="num"><b style="color:var(--${b.moy == null ? "text-muted" : b.reussite ? "success" : "danger"})">${b.moy == null ? t("notes.nc") : fmt(b.moy)}</b></td><td>${esc(b.appreciation || "—")}</td>
         ${f.type === "annuel" ? `<td class="small">${b.trimestres.map(x => `${esc(x.libelle.replace("Trimestre ", "T"))} : ${fmt(x.moy)}`).join(" · ")}</td><td>${b.decisionFinale ? tag(b.decisionFinale === "Promu" ? "success" : b.decisionFinale === "Redouble" ? "danger" : "warn", b.decisionFinale) : "—"}</td>` : ""}
-        <td>${b.distinction ? tag("warn", t("bul.tableauHonneur"), "pi-star") : ""}</td><td class="num">${b.discipline.total} h</td>
+        <td>${b.distinction ? tag("warn", t("bul.tableauHonneur"), "pi-star") : ""}</td>${disciplineGeree() ? `<td class="num">${b.discipline.total} h</td>` : ""}
         <td class="right"><button class="btn text sm" data-act="apercu-bulletin" data-v="${b.e.id}"><i class="pi pi-eye"></i>${t("bul.apercu")}</button></td></tr>`).join("")}
       </tbody></table></div></div>
       <div class="card" style="margin-top:16px"><div class="card-head"><h2>${t("bul.statsMatieres")}</h2></div><div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.matiere")}</th><th class="num">${t("bul.coef")}</th><th class="num">${t("bul.moyenne")}</th><th class="num">${t("bul.plusHaute")}</th><th class="num">${t("bul.plusBasse")}</th><th class="num">${t("bul.ecartType")}</th><th>${t("bul.tauxReussite")}</th></tr></thead><tbody>
@@ -1630,7 +1666,7 @@
       <div class="boxes">
         <div class="box"><h4>${t("bul.resultat")}</h4><div class="big">${fmt(b.moy)} / 20</div><div>${t("bul.rang")} : <b>${libelleRang(b.rang, e.genre)}</b> / ${res.stats.effectif}</div><div>${esc(b.appreciation || "")}</div>${b.distinction ? `<div class="honneur">★ ${t("bul.tableauHonneur")}</div>` : ""}${b.decisionFinale ? `<div style="margin-top:6px">${t("bul.decision")} : <b>${esc(b.decisionFinale)}</b></div>` : ""}</div>
         <div class="box"><h4>${t("bul.profilClasse")}</h4><div>${t("bul.moyenneClasse")} : <b>${fmt(res.stats.moyenne)}</b></div><div>${t("bul.moyPremier")} : <b>${fmt(res.stats.max)}</b></div><div>${t("bul.moyDernier")} : <b>${fmt(res.stats.min)}</b></div><div>${t("bul.ecartType")} : <b>${fmt(res.stats.ecart)}</b></div><div>${t("bul.tauxReussite")} : <b>${fmt(res.stats.taux)} %</b></div></div>
-        <div class="box"><h4>${t("bul.discipline")}</h4><div>${t("disc.total")} : <b>${b.discipline.total} h</b></div><div>${t("disc.nonJustifiees")} : <b>${b.discipline.nj} h</b></div><div>${t("disc.justifiees")} : <b>${b.discipline.j} h</b></div><div>${t("disc.decision")} : <b>${esc(b.discipline.decision || "—")}</b></div></div>
+        ${!disciplineGeree() ? "" : `<div class="box"><h4>${t("bul.discipline")}</h4><div>${t("disc.total")} : <b>${b.discipline.total} h</b></div><div>${t("disc.nonJustifiees")} : <b>${b.discipline.nj} h</b></div><div>${t("disc.justifiees")} : <b>${b.discipline.j} h</b></div><div>${t("disc.decision")} : <b>${esc(b.discipline.decision || "—")}</b></div></div>`}
       </div>
       <div class="signatures" style="display:flex;justify-content:space-between;margin-top:22px;color:#64748b"><span>${t("bul.signParent")}</span><span>${t("bul.signTitulaire")}</span><span>${t("bul.signDirecteur")}</span></div>
       ${piedApplication()}
@@ -1950,6 +1986,378 @@
     S.st = { type, id, verrou: !!id || !!parent, ...ancetres(type, x), code: x.code, libelle: x.libelle, montant: x.montantInscription ?? "", serie: x.serie || "" };
     dialogStructure();
   }
+  /* ---------------- Paramétrage : barèmes et appréciations ----------------
+     POST /bareme/add ; PATCH /bareme/update/{id} ; POST /appreciation/add?id_bareme= ; PATCH /appreciation/update/{id} */
+  const champAdm = (prefixe, cle, label, valeur, type = "text", extra = "", obligatoire = true) => `<div class="field"><label for="${prefixe}-${cle}">${t(label)}${obligatoire ? " *" : ""}</label><input class="input" id="${prefixe}-${cle}" name="${cle}" type="${type}" value="${esc(valeur ?? "")}" ${obligatoire ? "required" : ""} ${extra}></div>`;
+  const piedFormulaire = idForm => `<button class="btn secondary" data-act="fermer">${t("c.annuler")}</button><button class="btn" type="submit" form="${idForm}"><i class="pi pi-check"></i>${t("c.enregistrer")}</button>`;
+  const erreurFormulaire = (idZone, erreur) => { document.getElementById(idZone).innerHTML = `<div class="message danger"><i class="pi pi-times-circle"></i><div class="small">${erreur}</div></div>`; };
+  function dialogBareme(id) {
+    const x = id ? bareme(id) : { code: "", libelle: "", valeurMax: "" };
+    dialog(id ? t("adm.modifierBareme", { b: x.libelle }) : t("adm.ajouterBareme"), `<form id="form-bareme" data-form="bareme" data-id="${id || ""}"><div class="stack"><div class="form-grid">
+        ${champAdm("bar", "code", "c.code", x.code, "text", 'maxlength="10"')}${champAdm("bar", "libelle", "c.libelle", x.libelle, "text", 'maxlength="60" placeholder="Sur 20"')}
+        ${champAdm("bar", "valeurMax", "adm.noteMax", x.valeurMax, "number", 'min="0.01" step="0.01"')}
+      </div><span class="hint"><i class="pi pi-info-circle"></i> ${t("adm.aideBareme")}</span><div id="bar-erreur"></div></div></form>`, piedFormulaire("form-bareme"));
+  }
+  function enregistrerBareme(form) {
+    const id = Number(form.dataset.id) || null, d = Object.fromEntries(new FormData(form).entries());
+    const v = { code: d.code.trim(), libelle: d.libelle.trim(), valeurMax: r2(Number(d.valeurMax)) };
+    // Mêmes contrôles que le backend : code unique (DUPLICATION_CODE), note max > 0,
+    // pas de note max inférieure à la borne haute d'une appréciation existante (APPRECIATION_HORS_BAREME)
+    const depasse = id ? D.appreciations.find(a => a.bareme === id && a.max > v.valeurMax) : null;
+    const erreur = !v.code || !v.libelle ? t("adm.errChamps")
+      : !(v.valeurMax > 0) ? t("adm.errNoteMax")
+      : D.baremes.some(x => x.id !== id && x.code.toLowerCase() === v.code.toLowerCase()) ? t("adm.errCode", { c: v.code })
+      : depasse ? t("adm.errBaremeReduit", { m: fmt(v.valeurMax), a: depasse.libelle, x: fmt(depasse.max) })
+      : null;
+    if (erreur) { erreurFormulaire("bar-erreur", erreur); return; }
+    if (id) Object.assign(bareme(id), v);
+    else { const nouveau = { id: Math.max(0, ...D.baremes.map(x => x.id)) + 1, ...v }; D.baremes.push(nouveau); S.f.baremeSel = nouveau.id; }
+    fermer(); render();
+    toast("success", t(id ? "adm.baremeModifie" : "adm.baremeAjoute"), `${v.libelle} · ${t("adm.noteMax")} ${fmt(v.valeurMax)}`);
+  }
+  function dialogAppreciation(id) {
+    const x = id ? byId(D.appreciations, id) : { bareme: S.f.baremeSel, libelle: "", libelleEn: "", min: "", max: "" };
+    const b = bareme(x.bareme);
+    // Proposition pour un ajout : l'intervalle commence juste après la dernière appréciation du barème
+    if (!id) {
+      const hautes = D.appreciations.filter(a => a.bareme === b.id).map(a => a.max);
+      if (hautes.length && Math.max(...hautes) < b.valeurMax) x.min = r2(Math.max(...hautes) + 0.01);
+      else if (!hautes.length) x.min = 0;
+      if (x.min !== "") x.max = b.valeurMax;
+    }
+    dialog(id ? t("adm.modifierAppreciation", { a: x.libelle }) : t("adm.ajouterAppreciation", { b: b.libelle }), `<form id="form-appreciation" data-form="appreciation" data-id="${id || ""}" data-bareme="${b.id}"><div class="stack">
+      <div class="row small muted"><i class="pi pi-sliders-h"></i>${t("notes.bareme")} : <b>${esc(b.libelle)}</b> · ${t("adm.noteMax")} ${fmt(b.valeurMax)}</div>
+      <div class="form-grid">
+        ${champAdm("app", "libelle", "c.libelle", x.libelle, "text", 'maxlength="60"')}${champAdm("app", "libelleEn", "adm.libelleEn", x.libelleEn, "text", 'maxlength="60"', false)}
+        ${champAdm("app", "min", "adm.min", x.min, "number", `min="0" max="${b.valeurMax}" step="0.01"`)}${champAdm("app", "max", "adm.max", x.max, "number", `min="0" max="${b.valeurMax}" step="0.01"`)}
+      </div><span class="hint"><i class="pi pi-info-circle"></i> ${t("adm.infoIntervalles")}</span><div id="app-erreur"></div></div></form>`, piedFormulaire("form-appreciation"));
+  }
+  function enregistrerAppreciation(form) {
+    const id = Number(form.dataset.id) || null, idBareme = Number(form.dataset.bareme), b = bareme(idBareme);
+    const d = Object.fromEntries(new FormData(form).entries());
+    const v = { libelle: d.libelle.trim(), libelleEn: d.libelleEn.trim() || null, min: r2(Number(d.min)), max: r2(Number(d.max)) };
+    // Mêmes contrôles que le backend : libellé unique dans le barème, min ≤ max (INTERVALLE_INVALIDE),
+    // intervalle dans [0, note max] (INTERVALLE_HORS_BAREME), pas de chevauchement (INTERVALLE_CHEVAUCHEMENT)
+    const autres = D.appreciations.filter(a => a.bareme === idBareme && a.id !== id);
+    const chevauche = autres.find(a => v.min <= a.max && v.max >= a.min);
+    const erreur = !v.libelle || d.min === "" || d.max === "" ? t("adm.errChampsAppreciation")
+      : autres.some(a => a.libelle.toLowerCase() === v.libelle.toLowerCase()) ? t("adm.errLibelleAppreciation", { l: v.libelle })
+      : v.min > v.max ? t("adm.errIntervalle")
+      : v.min < 0 || v.max > b.valeurMax ? t("adm.errHorsBareme", { m: fmt(b.valeurMax), b: b.libelle })
+      : chevauche ? t("adm.errChevauchement", { a: chevauche.libelle, min: fmt(chevauche.min), max: fmt(chevauche.max) })
+      : null;
+    if (erreur) { erreurFormulaire("app-erreur", erreur); return; }
+    if (id) Object.assign(byId(D.appreciations, id), v);
+    else D.appreciations.push({ id: Math.max(0, ...D.appreciations.map(a => a.id)) + 1, bareme: idBareme, ...v });
+    D.appreciations.sort((a, b2) => a.bareme - b2.bareme || a.min - b2.min);
+    fermer(); render();
+    toast("success", t(id ? "adm.appreciationModifiee" : "adm.appreciationAjoutee"), `${v.libelle} · [${fmt(v.min)} ; ${fmt(v.max)}]`);
+  }
+
+  /* ---------------- Paramétrage : décisions disciplinaires ----------------
+     POST /discipline-decision/add ; PATCH /discipline-decision/update/{id} ; DELETE /discipline-decision/delete/{id} */
+  // Des disciplines d'élèves existent-elles pour l'année en cours ? (S.demoSansDiscipline simule une année vierge)
+  const disciplinesEnregistrees = () => !S.demoSansDiscipline && Object.values(D.disciplines).some(parEleve => Object.keys(parEleve).length);
+  // Nombre de disciplines (élève × évaluation) de l'année en cours auxquelles la décision a été attribuée
+  const attributionsDecision = d => !disciplinesEnregistrees() ? 0
+    : Object.values(D.disciplines).reduce((s, parEleve) => s + Object.values(parEleve).filter(x => x.nonJustifie >= d.min && x.nonJustifie <= d.max).length, 0);
+  // Contrôle d'aide : les intervalles doivent couvrir 0 → ∞ sans trou, sinon certains élèves n'auraient aucune décision
+  function couvertureDecisions() {
+    const tries = [...D.decisions].sort((a, b) => a.min - b.min);
+    const trous = [];
+    let attendu = 0;
+    for (const d of tries) { if (d.min > attendu) trous.push(`${attendu} → ${d.min - 1} h`); attendu = Math.max(attendu, d.max + 1); }
+    if (tries.length && attendu <= 999) trous.push(`${attendu} h ${t("adm.etPlus")}`);
+    return trous.length
+      ? `<div class="card-body" style="border-top:1px solid var(--border)"><div class="message warn"><i class="pi pi-exclamation-triangle"></i><div class="small">${t("adm.decisionsTrous", { p: trous.join(", ") })}</div></div></div>`
+      : D.decisions.length ? `<div class="card-body small muted" style="border-top:1px solid var(--border)"><i class="pi pi-check-circle" style="color:var(--success)"></i> ${t("adm.decisionsCouvertes")}</div>` : "";
+  }
+  function dialogDecision(id) {
+    const x = id ? byId(D.decisions, id) : { libelle: "", libelleEn: "", min: Math.max(-1, ...D.decisions.filter(d => d.max !== 999).map(d => d.max)) + 1, max: "" };
+    dialog(id ? t("adm.modifierDecision", { d: x.libelle }) : t("adm.ajouterDecision"), `<form id="form-decision" data-form="decision" data-id="${id || ""}"><div class="stack"><div class="form-grid">
+        ${champAdm("dec", "libelle", "c.libelle", x.libelle, "text", 'maxlength="60"')}${champAdm("dec", "libelleEn", "adm.libelleEn", x.libelleEn, "text", 'maxlength="60"', false)}
+        ${champAdm("dec", "min", "adm.heuresMin", x.min, "number", 'min="0" step="1"')}${champAdm("dec", "max", "adm.heuresMax", x.max, "number", 'min="0" step="1"')}
+      </div><span class="hint"><i class="pi pi-info-circle"></i> ${t("adm.aideDecision")}</span><div id="dec-erreur"></div></div></form>`, piedFormulaire("form-decision"));
+  }
+  function enregistrerDecision(form) {
+    const id = Number(form.dataset.id) || null, d = Object.fromEntries(new FormData(form).entries());
+    const v = { libelle: d.libelle.trim(), libelleEn: d.libelleEn.trim() || null, min: Number(d.min), max: Number(d.max) };
+    // Mêmes contrôles que le backend : libellé unique (DUPLICATION_LIBELLE), min ≤ max (INTERVALLE_INVALIDE),
+    // pas de chevauchement (INTERVALLE_CHEVAUCHEMENT), modification bloquée si disciplines enregistrées (DISCIPLINES_ENREGISTREES)
+    const autres = D.decisions.filter(x => x.id !== id);
+    const chevauche = autres.find(x => v.min <= x.max && v.max >= x.min);
+    const erreur = id && disciplinesEnregistrees() ? t("adm.decisionsBloquees")
+      : !v.libelle || d.min === "" || d.max === "" ? t("adm.errChampsDecision")
+      : !Number.isInteger(v.min) || !Number.isInteger(v.max) || v.min < 0 ? t("adm.errHeuresEntieres")
+      : autres.some(x => x.libelle.toLowerCase() === v.libelle.toLowerCase()) ? t("adm.errLibelleDecision", { l: v.libelle })
+      : v.min > v.max ? t("adm.errIntervalle")
+      : chevauche ? t("adm.errChevauchementDecision", { d: chevauche.libelle, min: chevauche.min, max: chevauche.max === 999 ? "∞" : chevauche.max })
+      : null;
+    if (erreur) { erreurFormulaire("dec-erreur", erreur); return; }
+    if (id) Object.assign(byId(D.decisions, id), v);
+    else D.decisions.push({ id: Math.max(0, ...D.decisions.map(x => x.id)) + 1, ...v });
+    D.decisions.sort((a, b) => a.min - b.min);
+    fermer(); render();
+    toast("success", t(id ? "adm.decisionModifiee" : "adm.decisionAjoutee"), `${v.libelle} · ${v.min} → ${v.max === 999 ? "∞" : v.max} h`);
+  }
+  function supprimerDecision(id) {
+    const d = byId(D.decisions, id);
+    if (attributionsDecision(d)) { confirmation("", "adm.errDecisionAttribuee"); return; }
+    confirmation(t("adm.confirmerSuppressionDecision", { d: d.libelle }), null, () => {
+      D.decisions = D.decisions.filter(x => x.id !== id);
+      render();
+      toast("success", t("adm.decisionSupprimee"), d.libelle);
+    });
+  }
+
+  /* ---------------- Paramétrage : années scolaires et trimestres ----------------
+     Années (GET /annee/all) : la première année est saisie une seule fois (POST /annee/add avec code et libellé) ;
+     clôture de l'année en cours : PATCH /annee/update/{id} {"is_cloture": true} ;
+     passage à l'année suivante : POST /annee/add sans corps, l'année est calculée par le backend depuis la plus récente
+     (2026-2027 → 2027-2028). Une seule année en cours à la fois.
+     Trimestres : POST /trimestre/add ; PATCH /trimestre/update/{id} ; DELETE /trimestre/delete/{id}
+     (suppression impossible pendant une année en cours — CANNOT_DELETE — ou si des évaluations y sont rattachées). */
+  const anneeEnCours = () => D.annees.find(a => !a.cloture) || null;
+  const anneeRecente = () => D.annees.reduce((r, a) => !r || a.id > r.id ? a : r, null);
+  // « 2026-2027 » → « 2027-2028 » (code et libellé)
+  const decalerAnnee = v => String(v).replace(/(\d{4})\s*([-/])\s*(\d{4})/, (_, a, sep, b) => `${Number(a) + 1}${sep}${Number(b) + 1}`);
+  function anneeSuivante() {
+    const r = anneeRecente();
+    if (!r || !/\d{4}\s*[-/]\s*\d{4}/.test(r.code)) return null;
+    const code = decalerAnnee(r.code);
+    return { code, libelle: /\d{4}\s*[-/]\s*\d{4}/.test(r.libelle) ? decalerAnnee(r.libelle) : code };
+  }
+  function dialogPremiereAnnee() {
+    dialog(t("adm.ajouterPremiereAnnee"), `<form id="form-annee" data-form="annee"><div class="stack"><div class="form-grid">
+        ${champAdm("an", "code", "c.code", "", "text", 'maxlength="10" placeholder="2026-2027" pattern="\\d{4}-\\d{4}"')}${champAdm("an", "libelle", "c.libelle", "", "text", 'maxlength="60" placeholder="2026-2027"')}
+      </div><span class="hint"><i class="pi pi-info-circle"></i> ${t("adm.aidePremiereAnnee")}</span><div id="an-erreur"></div></div></form>`, piedFormulaire("form-annee"));
+  }
+  function enregistrerAnnee(form) {
+    const d = Object.fromEntries(new FormData(form).entries());
+    const v = { code: d.code.trim(), libelle: d.libelle.trim() };
+    const m = v.code.match(/^(\d{4})-(\d{4})$/);
+    const erreur = D.annees.length ? t("adm.errAnneeExiste")
+      : !v.code || !v.libelle ? t("adm.errChamps")
+      : !m || Number(m[2]) !== Number(m[1]) + 1 ? t("adm.errFormatAnnee")
+      : null;
+    if (erreur) { erreurFormulaire("an-erreur", erreur); return; }
+    D.annees.push({ id: 1, ...v, cloture: false });
+    D.ecole.annee = v.libelle;
+    fermer(); render();
+    toast("success", t("adm.anneeAjoutee"), v.libelle);
+  }
+  function cloturerAnnee(id) {
+    const a = byId(D.annees, id);
+    confirmation(t("adm.confirmerCloture"), null, () => {
+      a.cloture = true;
+      render(); toast("success", t("adm.anneeCloturee"), a.libelle);
+    });
+  }
+  function passerAnneeSuivante() {
+    const enCours = anneeEnCours(), suivante = anneeSuivante();
+    if (enCours || !suivante) return;
+    confirmation(t("adm.confirmerPassage", { a: suivante.libelle }), null, () => {
+      D.annees.push({ id: Math.max(...D.annees.map(a => a.id)) + 1, ...suivante, cloture: false });
+      D.ecole.annee = suivante.libelle;
+      render(); toast("success", t("adm.passageOk"), suivante.libelle);
+    });
+  }
+  function dialogTrimestre(id) {
+    const x = id ? byId(D.trimestres, id) : { code: `TRIM-${D.trimestres.length + 1}`, libelle: `${t("c.trimestre")} ${D.trimestres.length + 1}` };
+    dialog(id ? t("adm.modifierTrimestre", { t: x.libelle }) : t("adm.ajouterTrimestre"), `<form id="form-trimestre" data-form="trimestre" data-id="${id || ""}"><div class="stack"><div class="form-grid">
+        ${champAdm("tri", "code", "c.code", x.code, "text", 'maxlength="10"')}${champAdm("tri", "libelle", "c.libelle", x.libelle, "text", 'maxlength="60"')}
+      </div><div id="tri-erreur"></div></div></form>`, piedFormulaire("form-trimestre"));
+  }
+  function enregistrerTrimestre(form) {
+    const id = Number(form.dataset.id) || null, d = Object.fromEntries(new FormData(form).entries());
+    const v = { code: d.code.trim(), libelle: d.libelle.trim() };
+    const erreur = !v.code || !v.libelle ? t("adm.errChamps")
+      : D.trimestres.some(x => x.id !== id && x.code.toLowerCase() === v.code.toLowerCase()) ? t("adm.errCode", { c: v.code })
+      : null;
+    if (erreur) { erreurFormulaire("tri-erreur", erreur); return; }
+    if (id) Object.assign(byId(D.trimestres, id), v);
+    else D.trimestres.push({ id: Math.max(0, ...D.trimestres.map(x => x.id)) + 1, ...v });
+    fermer(); render();
+    toast("success", t(id ? "adm.trimestreModifie" : "adm.trimestreAjoute"), v.libelle);
+  }
+  function supprimerTrimestre(id) {
+    const x = byId(D.trimestres, id), enCours = anneeEnCours(), n = D.evaluations.filter(e => e.trimestre === id).length;
+    if (enCours || n) {
+      dialog(t("c.confirmation"), `<div class="message danger"><i class="pi pi-times-circle"></i>${esc(enCours ? t("adm.trimestreSupprAnnee", { a: enCours.libelle }) : t("adm.trimestreSupprEval", { n }))}</div>`, `<button class="btn secondary" data-act="fermer">${t("c.fermer")}</button>`);
+      return;
+    }
+    confirmation(t("adm.confirmerSuppressionTrimestre", { t: x.libelle }), null, () => {
+      D.trimestres = D.trimestres.filter(y => y.id !== id);
+      render(); toast("success", t("adm.trimestreSupprime"), x.libelle);
+    });
+  }
+
+  /* ---------------- Paramétrage : groupes pliables (matières, matières évaluées) ----------------
+     S.plies contient les clés "prefixe:id" des groupes repliés (même mécanisme que l'arbre de la structure) */
+  const pliOuvert = (prefixe, id) => !(S.plies && S.plies.has(`${prefixe}:${id}`));
+  const noeudPli = (prefixe, id, nbEnfants) => nbEnfants
+    ? `<button class="btn text icon sm tree-toggle" data-act="struct-plier" data-v="${prefixe}:${id}" title="${t(pliOuvert(prefixe, id) ? "adm.plier" : "adm.deplier")}" aria-expanded="${pliOuvert(prefixe, id)}"><i class="pi ${pliOuvert(prefixe, id) ? "pi-chevron-down" : "pi-chevron-right"}"></i></button>`
+    : `<span class="tree-toggle-vide"></span>`;
+  const barrePli = (prefixe, groupes) => groupes.length ? `<div class="card-body row" style="padding-top:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">
+      <button class="btn text sm" data-act="plier-groupes" data-v="${prefixe}|deplier"><i class="pi pi-angle-double-down"></i>${t("adm.toutDeplier")}</button>
+      <button class="btn text sm" data-act="plier-groupes" data-v="${prefixe}|plier"><i class="pi pi-angle-double-right"></i>${t("adm.toutPlier")}</button></div>` : "";
+  const btnModifier = (act, id) => `<button class="btn text icon sm" data-act="${act}" data-v="${id}" title="${t("c.modifier")}"><i class="pi pi-pencil"></i></button>`;
+  const btnSupprimer = (act, id, raison) => `<button class="btn text icon sm" data-act="${act}" data-v="${id}" ${raison ? `disabled title="${esc(raison)}"` : `title="${t("c.supprimer")}"`}><i class="pi pi-trash" style="color:var(--danger)"></i></button>`;
+
+  /* ---------------- Paramétrage : matières évaluées ----------------
+     POST /groupe-matiere-evalue/add?niveau_id= ; PATCH /groupe-matiere-evalue/update/{id} ; DELETE /groupe-matiere-evalue/delete/{id}
+     POST /matiere-evalue/add?groupe_matiere_evalue_id=&bareme_id= ; PATCH /matiere-evalue/update/{id} ; DELETE /matiere-evalue/delete/{id}
+     Codes uniques dans toute l'école (DUPLICATION_CODE) ; suppressions impossibles pendant une année en cours (CANNOT_DELETE). */
+  const TYPES_MATIERE = ["Ecrite", "Orale", "Pratique"];
+  function dialogGroupeEv(id) {
+    const x = id ? byId(D.groupes, id) : { code: "", libelle: "", niveau: Number(S.f.matEv.niveau) };
+    const n = byId(D.niveaux, x.niveau);
+    dialog(id ? t("adm.modifierGroupeMatiere", { g: x.libelle }) : t("adm.ajouterGroupeEv"), `<form id="form-groupe-ev" data-form="groupe-ev" data-id="${id || ""}"><div class="stack">
+      <div class="row small muted"><i class="pi pi-sitemap"></i>${t("c.niveau")} : <b>${esc(n.libelle)}</b> · ${esc(byId(D.cycles, n.cycle).libelle)}</div>
+      <div class="form-grid">
+        ${champAdm("ge", "code", "c.code", x.code, "text", 'maxlength="160" placeholder="SCI-2NDE"')}${champAdm("ge", "libelle", "c.libelle", x.libelle, "text", 'maxlength="60" placeholder="Matières scientifiques"')}
+      </div><span class="hint"><i class="pi pi-info-circle"></i> ${t("adm.aideGroupeEv")}</span><div id="ge-erreur"></div></div></form>`, piedFormulaire("form-groupe-ev"));
+  }
+  function enregistrerGroupeEv(form) {
+    const id = Number(form.dataset.id) || null, d = Object.fromEntries(new FormData(form).entries());
+    const v = { code: d.code.trim(), libelle: d.libelle.trim() };
+    const erreur = !v.code || !v.libelle ? t("adm.errChamps")
+      : D.groupes.some(g => g.id !== id && g.code.toLowerCase() === v.code.toLowerCase()) ? t("adm.errCode", { c: v.code })
+      : null;
+    if (erreur) { erreurFormulaire("ge-erreur", erreur); return; }
+    if (id) Object.assign(byId(D.groupes, id), v);
+    else D.groupes.push({ id: Math.max(0, ...D.groupes.map(g => g.id)) + 1, ...v, niveau: Number(S.f.matEv.niveau) });
+    fermer(); render();
+    toast("success", t(id ? "adm.groupeModifie" : "adm.groupeAjoute"), v.libelle);
+  }
+  // groupe fourni (« + Matière » d'un groupe) ou modification : groupe affiché et non modifiable
+  function dialogMatiereEv(id, groupe) {
+    const x = id ? byId(D.matieres, id) : { code: "", libelle: "", groupe: groupe || "", type: "Ecrite", coef: "", bareme: D.baremes[0]?.id };
+    const verrou = !!id || !!groupe, niveau = Number(S.f.matEv.niveau);
+    dialog(id ? t("adm.modifierMatiere", { m: x.libelle }) : t("adm.ajouterMatiereEv"), `<form id="form-matiere-ev" data-form="matiere-ev" data-id="${id || ""}" data-groupe="${verrou ? x.groupe : ""}"><div class="stack"><div class="form-grid">
+        <div class="field full"><label>${t("adm.groupe")} *</label><select class="select" name="groupe" ${verrou ? "disabled" : ""}>${option("", t("c.choisir"), x.groupe)}${D.groupes.filter(g => g.niveau === niveau || g.id === x.groupe).map(g => option(g.id, `${g.libelle} (${g.code})`, x.groupe)).join("")}</select>
+          ${verrou ? `<span class="hint"><i class="pi pi-lock"></i> ${t(id ? "adm.groupeNonModifiable" : "adm.groupeFixe")}</span>` : ""}</div>
+        ${champAdm("mv", "code", "c.code", x.code, "text", 'maxlength="10"')}${champAdm("mv", "libelle", "c.libelle", x.libelle, "text", 'maxlength="60"')}
+        <div class="field"><label>${t("adm.typeMatiere")} *</label><select class="select" name="type">${TYPES_MATIERE.map(k => option(k, t("adm.type." + k), x.type || "Ecrite")).join("")}</select></div>
+        ${champAdm("mv", "coef", "bul.coef", x.coef ?? "", "number", 'min="0" step="1"', false)}
+        <div class="field full"><label>${t("notes.bareme")} *</label><select class="select" name="bareme">${D.baremes.map(b => option(b.id, `${b.libelle} (${t("adm.noteMax")} ${fmt(b.valeurMax)})`, x.bareme)).join("")}</select></div>
+      </div><span class="hint"><i class="pi pi-info-circle"></i> ${t("adm.aideMatiereEv")}</span><div id="mv-erreur"></div></div></form>`, piedFormulaire("form-matiere-ev"));
+  }
+  function enregistrerMatiereEv(form) {
+    const id = Number(form.dataset.id) || null, d = Object.fromEntries(new FormData(form).entries());
+    const v = { code: d.code.trim(), libelle: d.libelle.trim(), type: d.type, coef: d.coef === "" ? null : Number(d.coef), bareme: Number(d.bareme) };
+    const groupe = Number(form.dataset.groupe || d.groupe);
+    const erreur = !groupe ? t("adm.errGroupeObligatoire")
+      : !v.code || !v.libelle ? t("adm.errChamps")
+      : v.coef != null && (!Number.isInteger(v.coef) || v.coef < 0) ? t("adm.errCoef")
+      : D.matieres.some(m => m.id !== id && m.code.toLowerCase() === v.code.toLowerCase()) ? t("adm.errCode", { c: v.code })
+      : null;
+    if (erreur) { erreurFormulaire("mv-erreur", erreur); return; }
+    if (id) Object.assign(byId(D.matieres, id), v);
+    else D.matieres.push({ id: Math.max(0, ...D.matieres.map(m => m.id)) + 1, ...v, groupe, prof: "" });
+    if (S.plies) S.plies.delete(`gme:${groupe}`);
+    fermer(); render();
+    toast("success", t(id ? "adm.matiereModifiee" : "adm.matiereAjoutee"), `${v.code} · ${v.libelle}`);
+  }
+
+  /* ---------------- Paramétrage : matières enseignées ----------------
+     POST /groupe-matiere/add ; PATCH /groupe-matiere/update/{id} ; DELETE /groupe-matiere/delete/{id} ; GET /groupe-matiere/all_with_matieres
+     POST /matiere/add?groupe_matiere_id= ; PATCH /matiere/update/{id} ; DELETE /matiere/delete/{id}
+     Suppressions impossibles pendant une année scolaire en cours (CANNOT_DELETE). */
+  function dialogGroupeMatiere(id) {
+    const x = id ? byId(D.groupesMatieres, id) : { libelle: "" };
+    dialog(id ? t("adm.modifierGroupeMatiere", { g: x.libelle }) : t("adm.ajouterGroupeMatiere"), `<form id="form-groupe-matiere" data-form="groupe-matiere" data-id="${id || ""}"><div class="stack"><div class="form-grid">
+        ${champAdm("gm", "libelle", "c.libelle", x.libelle, "text", 'maxlength="60" placeholder="Sciences"')}
+      </div><div id="gm-erreur"></div></div></form>`, piedFormulaire("form-groupe-matiere"));
+  }
+  function enregistrerGroupeMatiere(form) {
+    const id = Number(form.dataset.id) || null, libelle = new FormData(form).get("libelle").trim();
+    const erreur = !libelle ? t("adm.errLibelleObligatoire")
+      : D.groupesMatieres.some(g => g.id !== id && g.libelle.toLowerCase() === libelle.toLowerCase()) ? t("adm.errLibelleGroupe", { l: libelle })
+      : null;
+    if (erreur) { erreurFormulaire("gm-erreur", erreur); return; }
+    if (id) byId(D.groupesMatieres, id).libelle = libelle;
+    else D.groupesMatieres.push({ id: Math.max(0, ...D.groupesMatieres.map(g => g.id)) + 1, libelle });
+    fermer(); render();
+    toast("success", t(id ? "adm.groupeModifie" : "adm.groupeAjoute"), libelle);
+  }
+  // groupe fourni (bouton « + Matière » d'un groupe) : pré-rempli et non modifiable
+  function dialogMatiereEns(id, groupe) {
+    const x = id ? byId(D.matieresEns, id) : { code: "", libelle: "", groupe: groupe || "" };
+    const verrou = !!groupe;
+    dialog(id ? t("adm.modifierMatiere", { m: x.libelle }) : t("adm.ajouterMatiere"), `<form id="form-matiere-ens" data-form="matiere-ens" data-id="${id || ""}" data-groupe="${verrou ? groupe : ""}"><div class="stack"><div class="form-grid">
+        <div class="field full"><label>${t("adm.groupe")} *</label><select class="select" name="groupe" ${verrou ? "disabled" : ""}>${option("", t("c.choisir"), x.groupe)}${D.groupesMatieres.map(g => option(g.id, g.libelle, x.groupe)).join("")}</select>
+          ${verrou ? `<span class="hint"><i class="pi pi-lock"></i> ${t("adm.groupeFixe")}</span>` : ""}</div>
+        ${champAdm("me", "code", "c.code", x.code, "text", 'maxlength="10"')}${champAdm("me", "libelle", "c.libelle", x.libelle, "text", 'maxlength="60"')}
+      </div>${id ? `<span class="hint"><i class="pi pi-info-circle"></i> ${t("adm.aideRenommerMatiere")}</span>` : ""}<div id="me-erreur"></div></div></form>`, piedFormulaire("form-matiere-ens"));
+  }
+  function enregistrerMatiereEns(form) {
+    const id = Number(form.dataset.id) || null, d = Object.fromEntries(new FormData(form).entries());
+    const v = { code: d.code.trim(), libelle: d.libelle.trim(), groupe: Number(form.dataset.groupe || d.groupe) };
+    const erreur = !v.groupe ? t("adm.errGroupeObligatoire")
+      : !v.code || !v.libelle ? t("adm.errChamps")
+      : D.matieresEns.some(m => m.id !== id && m.code.toLowerCase() === v.code.toLowerCase()) ? t("adm.errCode", { c: v.code })
+      : D.matieresEns.some(m => m.id !== id && m.libelle.toLowerCase() === v.libelle.toLowerCase()) ? t("adm.errLibelleMatiere", { l: v.libelle })
+      : null;
+    if (erreur) { erreurFormulaire("me-erreur", erreur); return; }
+    if (id) {
+      const m = byId(D.matieresEns, id), ancien = m.libelle;
+      // Les enseignants référencent la matière : le nouveau libellé s'affiche partout (lien par id côté backend)
+      if (ancien !== v.libelle) D.enseignants.forEach(e => { e.matieres = e.matieres.map(x => x === ancien ? v.libelle : x); });
+      Object.assign(m, v);
+    } else D.matieresEns.push({ id: Math.max(0, ...D.matieresEns.map(m => m.id)) + 1, ...v });
+    if (S.plies) S.plies.delete(`gm:${v.groupe}`);
+    fermer(); render();
+    toast("success", t(id ? "adm.matiereModifiee" : "adm.matiereAjoutee"), `${v.code} · ${v.libelle}`);
+  }
+  function supprimerGroupeMatiere(id) {
+    const g = byId(D.groupesMatieres, id);
+    confirmation(t("adm.confirmerSuppressionGroupe", { g: g.libelle }), null, () => {
+      D.groupesMatieres = D.groupesMatieres.filter(x => x.id !== id);
+      render(); toast("success", t("adm.groupeSupprime"), g.libelle);
+    });
+  }
+  function supprimerMatiereEns(id) {
+    const m = byId(D.matieresEns, id);
+    confirmation(t("adm.confirmerSuppressionMatiere", { m: m.libelle }), null, () => {
+      D.matieresEns = D.matieresEns.filter(x => x.id !== id);
+      D.enseignants.forEach(e => { e.matieres = e.matieres.filter(x => x !== m.libelle); });
+      render(); toast("success", t("adm.matiereSupprimee"), m.libelle);
+    });
+  }
+
+  /* Suppression section / cycle / niveau / classe / série (DELETE /<type>/delete/{id}) :
+     impossible pendant une année scolaire en cours (CANNOT_DELETE). Hors année en cours, la suppression se propage
+     comme en base : section → cycles → niveaux → classes ; une série supprimée est retirée de ses niveaux (SET NULL). */
+  const raisonSuppressionStructure = () => { const a = anneeEnCours(); return a ? t("adm.supprAnneeEnCours", { a: a.libelle }) : ""; };
+  function descendantsStructure(type, id) {
+    const cycles = type === "section" ? D.cycles.filter(c => c.section === id).map(c => c.id) : type === "cycle" ? [id] : [];
+    const niveaux = type === "niveau" ? [id] : D.niveaux.filter(n => cycles.includes(n.cycle)).map(n => n.id);
+    const classes = type === "classe" ? [id] : D.classes.filter(c => niveaux.includes(c.niveau)).map(c => c.id);
+    return { cycles, niveaux, classes };
+  }
+  function supprimerStructure(type, id) {
+    const raison = raisonSuppressionStructure();
+    if (raison) { dialog(t("c.confirmation"), `<div class="message danger"><i class="pi pi-times-circle"></i>${esc(raison)}</div>`, `<button class="btn secondary" data-act="fermer">${t("c.fermer")}</button>`); return; }
+    const x = byId(STRUCT[type].liste(), id), dsc = descendantsStructure(type, id);
+    const enfants = [
+      type === "section" && dsc.cycles.length ? t("adm.nbCycles", { n: dsc.cycles.length }) : "",
+      ["section", "cycle"].includes(type) && dsc.niveaux.length ? t("adm.nbNiveaux", { n: dsc.niveaux.length }) : "",
+      type !== "classe" && type !== "serie" && dsc.classes.length ? t("adm.nbClasses", { n: dsc.classes.length }) : "",
+    ].filter(Boolean);
+    const niveauxSerie = type === "serie" ? D.niveaux.filter(n => n.serie === id) : [];
+    const detail = enfants.length ? t("adm.supprCascade", { e: enfants.join(", ") }) : niveauxSerie.length ? t("adm.supprSerieNiveaux", { n: niveauxSerie.map(n => n.libelle).join(", ") }) : "";
+    confirmation(`${t("adm.confirmerSuppressionStruct", { x: x.libelle })}${detail ? " " + detail : ""}`, null, () => {
+      if (type === "serie") { D.series = D.series.filter(s => s.id !== id); niveauxSerie.forEach(n => { n.serie = null; }); }
+      else {
+        if (type === "section") D.sections = D.sections.filter(s => s.id !== id);
+        D.cycles = D.cycles.filter(c => !dsc.cycles.includes(c.id));
+        D.niveaux = D.niveaux.filter(n => !dsc.niveaux.includes(n.id));
+        D.classes = D.classes.filter(c => !dsc.classes.includes(c.id));
+      }
+      render(); toast("success", t("adm.structSupprime"), x.libelle);
+    });
+  }
   function dialogStructure() {
     const st = S.st, type = st.type, id = st.id, C = STRUCT[type];
     const parents = C.parent ? ORDRE_STRUCT.slice(0, ORDRE_STRUCT.indexOf(C.parent) + 1) : [];
@@ -2011,14 +2419,14 @@
   }
 
   function ecranAdministration() {
-    const tab = S.tab.admin;
-    const onglets = [["structure", "adm.tStructure"], ["series", "adm.tSeries"], ["matieres", "adm.tMatieres"], ["baremes", "adm.tBaremes"], ["decisions", "adm.tDecisions"], ["annees", "adm.tAnnees"], ["configuration", "adm.tConfiguration"]];
+    const tab = S.tab.admin === "decisions" && !disciplineGeree() ? "configuration" : S.tab.admin;
+    const onglets = [["structure", "adm.tStructure"], ["series", "adm.tSeries"], ["matieresEns", "adm.tMatieresEns"], ["matieres", "adm.tMatieres"], ["baremes", "adm.tBaremes"], ["decisions", "adm.tDecisions"], ["annees", "adm.tAnnees"], ["configuration", "adm.tConfiguration"]];
     const actions = (code) => `<td class="right">${can(code + ":modifier") ? `<button class="btn text icon sm" title="${t("c.modifier")}"><i class="pi pi-pencil"></i></button>` : ""}${can(code + ":supprimer") ? `<button class="btn text icon sm" data-act="confirmer-suppression" title="${t("c.supprimer")}"><i class="pi pi-trash" style="color:var(--danger)"></i></button>` : ""}</td>`;
     let corps = "";
     if (tab === "structure") {
       // Arbre section > cycle > niveau > classe : chaque ligne propose d'ajouter un élément de niveau inférieur
       const ajout = (type, parent) => can(type + ":ajouter") ? `<button class="btn text sm" data-act="struct-ajouter" data-v="${type}|${parent}"><i class="pi pi-plus"></i>${t("adm.aj." + type)}</button>` : "";
-      const gestion = (type, id) => `${can(type + ":modifier") ? `<button class="btn text icon sm" data-act="struct-modifier" data-v="${type}|${id}" title="${t("c.modifier")}"><i class="pi pi-pencil"></i></button>` : ""}${can(type + ":supprimer") ? `<button class="btn text icon sm" data-act="confirmer-suppression" title="${t("c.supprimer")}"><i class="pi pi-trash" style="color:var(--danger)"></i></button>` : ""}`;
+      const gestion = (type, id) => `${can(type + ":modifier") ? `<button class="btn text icon sm" data-act="struct-modifier" data-v="${type}|${id}" title="${t("c.modifier")}"><i class="pi pi-pencil"></i></button>` : ""}${can(type + ":supprimer") ? btnSupprimer("struct-supprimer", `${type}|${id}`, raisonSuppressionStructure()) : ""}`;
       // Nœuds pliables : section, cycle et niveau (S.plies contient les clés "type:id" des nœuds repliés)
       const plies = S.plies || (S.plies = new Set());
       const ouvert = (type, id) => !plies.has(`${type}:${id}`);
@@ -2055,46 +2463,130 @@
         <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.code")}</th><th>${t("c.libelle")}</th><th>${t("adm.niveauxSerie")}</th><th></th></tr></thead><tbody>
         ${D.series.length ? D.series.map(x => { const niveaux = D.niveaux.filter(n => n.serie === x.id);
           return `<tr><td class="mono">${esc(x.code)}</td><td><b>${esc(x.libelle)}</b></td><td>${niveaux.length ? niveaux.map(n => tag("info", n.libelle)).join(" ") : `<span class="muted">—</span>`}</td>
-          <td class="right" style="white-space:nowrap">${can("serie:modifier") ? `<button class="btn text icon sm" data-act="struct-modifier" data-v="serie|${x.id}" title="${t("c.modifier")}"><i class="pi pi-pencil"></i></button>` : ""}${can("serie:supprimer") ? `<button class="btn text icon sm" data-act="confirmer-suppression" ${niveaux.length ? `disabled title="${t("adm.serieUtilisee")}"` : `title="${t("c.supprimer")}"`}><i class="pi pi-trash" style="color:var(--danger)"></i></button>` : ""}</td></tr>`; }).join("")
+          <td class="right" style="white-space:nowrap">${can("serie:modifier") ? `<button class="btn text icon sm" data-act="struct-modifier" data-v="serie|${x.id}" title="${t("c.modifier")}"><i class="pi pi-pencil"></i></button>` : ""}${can("serie:supprimer") ? btnSupprimer("struct-supprimer", `serie|${x.id}`, raisonSuppressionStructure()) : ""}</td></tr>`; }).join("")
           : `<tr><td colspan="4"><div class="empty">${t("adm.aucuneSerieListe")}</div></td></tr>`}
         </tbody></table></div></div>`;
+    } else if (tab === "matieresEns") {
+      // Matières enseignées regroupées, groupes pliables : chaque groupe propose « + Matière » (groupe pré-rempli et non modifiable)
+      const enCours = anneeEnCours();
+      const lignes = D.groupesMatieres.map(g => {
+        const mats = D.matieresEns.filter(m => m.groupe === g.id);
+        const raisonG = enCours ? t("adm.supprAnneeEnCours", { a: enCours.libelle }) : mats.length ? t("adm.groupeNonVide", { n: mats.length }) : "";
+        return `<tr class="group"><td><div class="row">${noeudPli("gm", g.id, mats.length)}<i class="pi pi-folder"></i> ${esc(g.libelle)}</div></td><td style="text-transform:none;letter-spacing:0;font-weight:500">${t("adm.nbMatieres", { n: mats.length })}</td><td></td>
+          <td class="right" style="white-space:nowrap">${can("matiere:ajouter") ? `<button class="btn text sm" data-act="ajouter-matiere-ens" data-v="${g.id}"><i class="pi pi-plus"></i>${t("c.matiere")}</button>` : ""}${can("groupe_matiere:modifier") ? btnModifier("modifier-groupe-matiere", g.id) : ""}${can("groupe_matiere:supprimer") ? btnSupprimer("supprimer-groupe-matiere", g.id, raisonG) : ""}</td></tr>`
+          + (!pliOuvert("gm", g.id) ? "" : mats.length ? mats.map(m => {
+            const profs = D.enseignants.filter(e => e.matieres.includes(m.libelle)).length;
+            const cours = D.cours.filter(c => matiere(c[3])?.libelle === m.libelle).length;
+            return `<tr><td><div class="row" style="padding-left:34px"><span class="mono small muted" style="min-width:52px">${esc(m.code)}</span><b>${esc(m.libelle)}</b></div></td>
+              <td>${profs ? tag("info", t("adm.nbEnseignants", { n: profs }), "pi-users") : `<span class="muted small">${t("adm.aucunEnseignant")}</span>`}</td>
+              <td>${cours ? tag("secondary", t("ens.nbCours", { n: cours })) : `<span class="muted small">—</span>`}</td>
+              <td class="right" style="white-space:nowrap">${can("matiere:modifier") ? btnModifier("modifier-matiere-ens", m.id) : ""}${can("matiere:supprimer") ? btnSupprimer("supprimer-matiere-ens", m.id, enCours ? t("adm.supprAnneeEnCours", { a: enCours.libelle }) : "") : ""}</td></tr>`;
+          }).join("") : `<tr><td colspan="4"><div class="muted small" style="padding-left:34px">${t("adm.groupeVide")}</div></td></tr>`);
+      }).join("");
+      corps = `<div class="card"><div class="card-head"><div><h2>${t("adm.matieresEns")}</h2><div class="small muted">${t("adm.matieresEnsAide")}</div></div>
+          <div class="row">${can("groupe_matiere:ajouter") ? `<button class="btn outlined sm" data-act="ajouter-groupe-matiere"><i class="pi pi-plus"></i>${t("adm.groupe")}</button>` : ""}${can("matiere:ajouter") ? `<button class="btn sm" data-act="ajouter-matiere-ens" data-v=""><i class="pi pi-plus"></i>${t("c.matiere")}</button>` : ""}</div></div>
+        ${barrePli("gm", D.groupesMatieres)}
+        <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.matiere")}</th><th>${t("nav.enseignants")}</th><th>${t("adm.coursPlanifies")}</th><th></th></tr></thead><tbody>
+        ${D.groupesMatieres.length ? lignes : `<tr><td colspan="4"><div class="empty">${t("adm.aucunGroupeMatiere")}</div></td></tr>`}
+        </tbody></table></div>
+        <div class="card-body small muted" style="border-top:1px solid var(--border)"><i class="pi pi-info-circle"></i> ${t("adm.matieresEnsInfo")}</div></div>`;
     } else if (tab === "matieres") {
-      corps = `<div class="card"><div class="card-head"><div class="filters"><div class="field"><label>${t("c.niveau")}</label><select class="select">${D.niveaux.map(n => option(n.id, n.libelle, 5)).join("")}</select></div></div>${can("matiere_evalue:ajouter") ? `<button class="btn sm"><i class="pi pi-plus"></i>${t("adm.ajouterMatiere")}</button>` : ""}</div>
-        <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.code")}</th><th>${t("c.matiere")}</th><th class="num">${t("bul.coef")}</th><th>${t("notes.bareme")}</th><th></th></tr></thead><tbody>
-        ${D.groupes.map(g => `<tr class="group"><td colspan="5">${esc(g.libelle)}</td></tr>` + D.matieres.filter(m => m.groupe === g.id).map(m => `<tr><td class="mono">${esc(m.code)}</td><td>${esc(m.libelle)}</td><td class="num">${m.coef}</td><td>${tag(m.bareme === 1 ? "info" : "warn", bareme(m.bareme).libelle)}</td>${actions("matiere_evalue")}</tr>`).join("")).join("")}
+      // Matières évaluées (bulletins) : groupes rattachés à un niveau, pliables ; « + Matière évaluée » d'un groupe le pré-remplit
+      const enCours = anneeEnCours(), niveau = Number(S.f.matEv.niveau);
+      const groupes = D.groupes.filter(g => g.niveau === niveau);
+      const raisonSuppr = enCours ? t("adm.supprAnneeEnCours", { a: enCours.libelle }) : "";
+      const lignes = groupes.map(g => {
+        const mats = D.matieres.filter(m => m.groupe === g.id);
+        const totalCoef = mats.reduce((s, m) => s + (m.coef || 0), 0);
+        return `<tr class="group"><td><div class="row">${noeudPli("gme", g.id, mats.length)}<i class="pi pi-folder"></i> ${esc(g.libelle)} <span class="mono" style="font-weight:500;text-transform:none;letter-spacing:0">· ${esc(g.code)}</span></div></td>
+          <td style="text-transform:none;letter-spacing:0;font-weight:500">${t("adm.nbMatieres", { n: mats.length })}</td><td class="num" style="text-transform:none;letter-spacing:0">${t("adm.totalCoef", { n: totalCoef })}</td><td></td>
+          <td class="right" style="white-space:nowrap">${can("matiere_evalue:ajouter") ? `<button class="btn text sm" data-act="ajouter-matiere-ev" data-v="${g.id}"><i class="pi pi-plus"></i>${t("c.matiere")}</button>` : ""}${can("groupe_matiere_evalue:modifier") ? btnModifier("modifier-groupe-ev", g.id) : ""}${can("groupe_matiere_evalue:supprimer") ? btnSupprimer("supprimer-groupe-ev", g.id, raisonSuppr) : ""}</td></tr>`
+          + (!pliOuvert("gme", g.id) ? "" : mats.length ? mats.map(m => `<tr><td><div class="row" style="padding-left:34px"><span class="mono small muted" style="min-width:52px">${esc(m.code)}</span><b>${esc(m.libelle)}</b></div></td>
+              <td>${tag("secondary", t("adm.type." + (m.type || "Ecrite")))}</td><td class="num">${m.coef ?? "—"}</td><td>${tag(m.bareme === 1 ? "info" : "warn", bareme(m.bareme).libelle)}</td>
+              <td class="right" style="white-space:nowrap">${can("matiere_evalue:modifier") ? btnModifier("modifier-matiere-ev", m.id) : ""}${can("matiere_evalue:supprimer") ? btnSupprimer("supprimer-matiere-ev", m.id, raisonSuppr) : ""}</td></tr>`).join("")
+            : `<tr><td colspan="5"><div class="muted small" style="padding-left:34px">${t("adm.groupeVide")}</div></td></tr>`);
+      }).join("");
+      corps = `<div class="card"><div class="card-head"><div><h2>${t("adm.matieresEv")}</h2><div class="small muted">${t("adm.matieresEvAide")}</div></div>
+          <div class="row">${can("groupe_matiere_evalue:ajouter") ? `<button class="btn outlined sm" data-act="ajouter-groupe-ev"><i class="pi pi-plus"></i>${t("adm.groupe")}</button>` : ""}${can("matiere_evalue:ajouter") ? `<button class="btn sm" data-act="ajouter-matiere-ev" data-v="" ${groupes.length ? "" : "disabled"}><i class="pi pi-plus"></i>${t("c.matiere")}</button>` : ""}</div></div>
+        <div class="card-body" style="padding-top:12px;padding-bottom:12px;border-bottom:1px solid var(--border)"><div class="filters"><div class="field" style="width:320px;max-width:100%"><label>${t("c.niveau")}</label><select class="select" data-f="matEv.niveau">${D.niveaux.map(n => option(n.id, `${n.libelle} · ${byId(D.cycles, n.cycle).libelle}`, niveau)).join("")}</select></div></div></div>
+        ${barrePli("gme", groupes)}
+        <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.matiere")}</th><th>${t("adm.typeMatiere")}</th><th class="num">${t("bul.coef")}</th><th>${t("notes.bareme")}</th><th></th></tr></thead><tbody>
+        ${groupes.length ? lignes : `<tr><td colspan="5"><div class="empty"><i class="pi pi-inbox" style="font-size:24px"></i><p>${t("adm.aucunGroupeNiveau", { n: byId(D.niveaux, niveau).libelle })}</p></div></td></tr>`}
         </tbody></table></div><div class="card-body small muted" style="border-top:1px solid var(--border)"><i class="pi pi-info-circle"></i> ${t("adm.infoCoef")}</div></div>`;
     } else if (tab === "baremes") {
       const b = bareme(S.f.baremeSel);
       const apps = D.appreciations.filter(a => a.bareme === b.id);
       corps = `<div class="grid grid-main-side" style="grid-template-columns:minmax(0,1fr) minmax(0,2fr)">
-        <div class="card"><div class="card-head"><h2>${t("adm.baremes")}</h2>${can("bareme:ajouter") ? `<button class="btn sm"><i class="pi pi-plus"></i>${t("c.ajouter")}</button>` : ""}</div>
-          <div class="table-wrap"><table class="dt"><tbody>${D.baremes.map(x => `<tr class="clickable ${x.id === b.id ? "selected" : ""}" data-act="bareme-sel" data-v="${x.id}"><td><b>${esc(x.libelle)}</b><div class="small muted mono">${esc(x.code)}</div></td><td class="num">${t("adm.noteMax")} : <b>${x.valeurMax}</b></td></tr>`).join("")}</tbody></table></div></div>
-        <div class="card"><div class="card-head"><h2>${t("adm.appreciationsDe", { b: b.libelle })}</h2>${can("appreciation:ajouter") ? `<button class="btn sm"><i class="pi pi-plus"></i>${t("c.ajouter")}</button>` : ""}</div>
+        <div class="card"><div class="card-head"><h2>${t("adm.baremes")}</h2>${can("bareme:ajouter") ? `<button class="btn sm" data-act="ajouter-bareme"><i class="pi pi-plus"></i>${t("c.ajouter")}</button>` : ""}</div>
+          <div class="table-wrap"><table class="dt"><tbody>${D.baremes.map(x => `<tr class="clickable ${x.id === b.id ? "selected" : ""}" data-act="bareme-sel" data-v="${x.id}"><td><b>${esc(x.libelle)}</b><div class="small muted mono">${esc(x.code)}</div></td><td class="num">${t("adm.noteMax")} : <b>${x.valeurMax}</b></td><td class="right">${can("bareme:modifier") ? `<button class="btn text icon sm" data-act="modifier-bareme" data-v="${x.id}" title="${t("c.modifier")}"><i class="pi pi-pencil"></i></button>` : ""}</td></tr>`).join("")}</tbody></table></div></div>
+        <div class="card"><div class="card-head"><h2>${t("adm.appreciationsDe", { b: b.libelle })}</h2>${can("appreciation:ajouter") ? `<button class="btn sm" data-act="ajouter-appreciation"><i class="pi pi-plus"></i>${t("c.ajouter")}</button>` : ""}</div>
           <div class="card-body"><div style="display:flex;height:30px;border-radius:6px;overflow:hidden;border:1px solid var(--border)">${apps.map((a, i) => `<div title="${esc(a.libelle)}" style="width:${(a.max - a.min + 0.01) / b.valeurMax * 100}%;background:var(--p-primary-${[100, 200, 300, 400, 500, 600, 700, 800][Math.min(7, Math.round(i * 7 / Math.max(1, apps.length - 1)))]});"></div>`).join("")}</div>
           <div class="row-between small muted" style="margin-top:4px"><span>0</span><span>${b.valeurMax}</span></div></div>
           <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.libelle")}</th><th>${t("adm.libelleEn")}</th><th class="num">${t("adm.min")}</th><th class="num">${t("adm.max")}</th><th></th></tr></thead><tbody>
-          ${apps.map(a => `<tr><td>${esc(a.libelle)}</td><td>${a.libelleEn ? esc(a.libelleEn) : `<span class="muted">—</span>`}</td><td class="num">${fmt(a.min)}</td><td class="num">${fmt(a.max)}</td>${actions("appreciation")}</tr>`).join("")}</tbody></table></div>
+          ${apps.map(a => `<tr><td>${esc(a.libelle)}</td><td>${a.libelleEn ? esc(a.libelleEn) : `<span class="muted">—</span>`}</td><td class="num">${fmt(a.min)}</td><td class="num">${fmt(a.max)}</td><td class="right">${can("appreciation:modifier") ? `<button class="btn text icon sm" data-act="modifier-appreciation" data-v="${a.id}" title="${t("c.modifier")}"><i class="pi pi-pencil"></i></button>` : ""}${can("appreciation:supprimer") ? `<button class="btn text icon sm" data-act="confirmer-suppression" title="${t("c.supprimer")}"><i class="pi pi-trash" style="color:var(--danger)"></i></button>` : ""}</td></tr>`).join("")
+          || `<tr><td colspan="5"><div class="empty">${t("adm.aucuneAppreciation")}</div></td></tr>`}</tbody></table></div>
           <div class="card-body small muted" style="border-top:1px solid var(--border)"><i class="pi pi-info-circle"></i> ${t("adm.infoIntervalles")}</div></div></div>`;
     } else if (tab === "decisions") {
-      corps = `<div class="message warn" style="margin-bottom:16px"><i class="pi pi-lock"></i><div class="small">${t("adm.decisionsBloquees")}</div></div>
-        <div class="card"><div class="card-head"><h2>${t("adm.decisions")}</h2></div><div class="table-wrap"><table class="dt"><thead><tr><th>${t("disc.decision")}</th><th>${t("adm.libelleEn")}</th><th class="num">${t("adm.heuresMin")}</th><th class="num">${t("adm.heuresMax")}</th><th class="num">${t("adm.elevesConcernes")}</th></tr></thead><tbody>
-        ${D.decisions.map(d => `<tr><td>${esc(d.libelle)}</td><td>${d.libelleEn ? esc(d.libelleEn) : `<span class="muted">—</span>`}</td><td class="num">${d.min}</td><td class="num">${d.max === 999 ? "∞" : d.max}</td><td class="num">${D.eleves.filter(e => { if (!estInscrit(e)) return false; const x = discipline(e.id, [1]); return x.nj >= d.min && x.nj <= d.max; }).length}</td></tr>`).join("")}
-        </tbody></table></div></div>`;
+      // Deux états (règles du backend) :
+      // - aucune discipline enregistrée pour l'année en cours : décisions modifiables et supprimables ;
+      // - disciplines déjà enregistrées : plus de modification (DISCIPLINES_ENREGISTREES), suppression impossible
+      //   pour une décision attribuée (DECISION_ATTRIBUEE). L'ajout reste possible dans les deux cas.
+      const bloque = disciplinesEnregistrees();
+      const btnAjout = can("discipline_decision:ajouter") ? `<button class="btn sm" data-act="ajouter-decision"><i class="pi pi-plus"></i>${t("c.ajouter")}</button>` : "";
+      corps = `<div class="row proto-note" style="margin-bottom:12px"><i class="pi pi-eye"></i>${t("demo.etatAnnee")}
+          <div class="segmented">${[["avec", "demo.disciplinesAvec"], ["sans", "demo.disciplinesSans"]].map(([k, l]) => `<button class="${(S.demoSansDiscipline ? "sans" : "avec") === k ? "on" : ""}" data-act="demo-decisions" data-v="${k}">${t(l)}</button>`).join("")}</div></div>
+        ${bloque
+          ? `<div class="message warn" style="margin-bottom:16px"><i class="pi pi-lock"></i><div class="small">${t("adm.decisionsBloquees")}</div></div>`
+          : `<div class="message success" style="margin-bottom:16px"><i class="pi pi-lock-open"></i><div class="small">${t("adm.decisionsLibres")}</div></div>`}
+        <div class="card"><div class="card-head"><div><h2>${t("adm.decisions")}</h2><div class="small muted">${t("adm.decisionsAide")}</div></div>${btnAjout}</div>
+        <div class="table-wrap"><table class="dt"><thead><tr><th>${t("disc.decision")}</th><th>${t("adm.libelleEn")}</th><th class="num">${t("adm.heuresMin")}</th><th class="num">${t("adm.heuresMax")}</th><th></th></tr></thead><tbody>
+        ${D.decisions.length ? D.decisions.map(d => `<tr><td>${esc(d.libelle)}</td><td>${d.libelleEn ? esc(d.libelleEn) : `<span class="muted">—</span>`}</td><td class="num">${d.min}</td><td class="num">${d.max === 999 ? "∞" : d.max}</td>
+          <td class="right" style="white-space:nowrap">${bloque ? `<span class="muted" title="${t("adm.decisionsBloquees")}"><i class="pi pi-lock"></i></span>`
+            : `${can("discipline_decision:modifier") ? `<button class="btn text icon sm" data-act="modifier-decision" data-v="${d.id}" title="${t("c.modifier")}"><i class="pi pi-pencil"></i></button>` : ""}${can("discipline_decision:supprimer") ? `<button class="btn text icon sm" data-act="supprimer-decision" data-v="${d.id}" title="${t("c.supprimer")}"><i class="pi pi-trash" style="color:var(--danger)"></i></button>` : ""}`}</td></tr>`).join("")
+          : `<tr><td colspan="5"><div class="empty"><i class="pi pi-inbox" style="font-size:24px"></i><p>${t("adm.aucuneDecision")}</p></div></td></tr>`}
+        </tbody></table></div>
+        ${couvertureDecisions()}</div>`;
     } else if (tab === "annees") {
-      corps = `<div class="grid grid-2"><div class="card"><div class="card-head"><h2>${t("adm.annees")}</h2>${can("annee:ajouter") ? `<button class="btn sm"><i class="pi pi-plus"></i>${t("c.ajouter")}</button>` : ""}</div><div class="table-wrap"><table class="dt"><tbody>
-        ${D.annees.map(a => `<tr><td><b>${esc(a.libelle)}</b></td><td>${a.cloture ? tag("secondary", t("adm.cloturee")) : tag("success", t("adm.enCours"))}</td><td class="right">${!a.cloture && can("annee:cloturer") ? `<button class="btn danger outlined sm" data-act="cloturer"><i class="pi pi-lock"></i>${t("adm.cloturer")}</button>` : ""}</td></tr>`).join("")}
+      // Une seule année en cours ; après sa clôture, « Passer à l'année suivante » crée l'année calculée depuis la plus récente
+      const enCours = anneeEnCours(), suivante = anneeSuivante();
+      const supprimable = x => !enCours && !D.evaluations.some(e => e.trimestre === x.id);
+      const bandeau = !D.annees.length
+        ? `<div class="message warn"><i class="pi pi-exclamation-triangle"></i><div class="small">${t("adm.aucuneAnnee")}</div></div>`
+        : !enCours && suivante
+          ? `<div class="message"><i class="pi pi-info-circle"></i><div class="stack" style="gap:10px"><div class="small">${t("adm.anneeClotureeInfo", { a: anneeRecente().libelle, s: suivante.libelle })}</div>
+              ${can("annee:ajouter") ? `<div><button class="btn sm" data-act="annee-suivante"><i class="pi pi-forward"></i>${t("adm.passerAnneeSuivante", { a: suivante.libelle })}</button></div>` : ""}</div></div>`
+          : "";
+      corps = `<div class="grid grid-2"><div class="card"><div class="card-head"><div><h2>${t("adm.annees")}</h2><div class="small muted">${t("adm.anneesAide")}</div></div>${!D.annees.length && can("annee:ajouter") ? `<button class="btn sm" data-act="ajouter-annee"><i class="pi pi-plus"></i>${t("adm.ajouterPremiereAnnee")}</button>` : ""}</div>
+        ${bandeau ? `<div class="card-body" style="border-bottom:1px solid var(--border)">${bandeau}</div>` : ""}
+        <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.code")}</th><th>${t("c.libelle")}</th><th>${t("c.statut")}</th><th></th></tr></thead><tbody>
+        ${D.annees.length ? [...D.annees].reverse().map(a => `<tr><td class="mono">${esc(a.code)}</td><td><b>${esc(a.libelle)}</b></td><td>${a.cloture ? tag("secondary", t("adm.cloturee")) : tag("success", t("adm.enCours"))}</td>
+          <td class="right">${!a.cloture && can("annee:modifier") ? `<button class="btn danger outlined sm" data-act="cloturer" data-v="${a.id}"><i class="pi pi-lock"></i>${t("adm.cloturer")}</button>` : ""}</td></tr>`).join("")
+          : `<tr><td colspan="4"><div class="empty">${t("adm.aucuneAnneeListe")}</div></td></tr>`}
         </tbody></table></div></div>
-        <div class="card"><div class="card-head"><h2>${t("adm.trimestres")}</h2></div><div class="table-wrap"><table class="dt"><tbody>${D.trimestres.map(x => `<tr><td class="mono">${esc(x.code)}</td><td>${esc(x.libelle)}</td><td class="num">${D.evaluations.filter(e => e.trimestre === x.id).length} ${t("eval.evaluations")}</td></tr>`).join("")}</tbody></table></div></div></div>`;
+        <div class="card"><div class="card-head"><div><h2>${t("adm.trimestres")}</h2><div class="small muted">${t(enCours ? "adm.trimestresBloques" : "adm.trimestresLibres")}</div></div>${can("trimestre:ajouter") ? `<button class="btn sm" data-act="ajouter-trimestre"><i class="pi pi-plus"></i>${t("c.ajouter")}</button>` : ""}</div>
+        <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.code")}</th><th>${t("c.libelle")}</th><th class="num">${t("nav.evaluations")}</th><th></th></tr></thead><tbody>
+        ${D.trimestres.length ? D.trimestres.map(x => { const n = D.evaluations.filter(e => e.trimestre === x.id).length;
+          const raison = enCours ? t("adm.trimestreSupprAnnee", { a: enCours.libelle }) : n ? t("adm.trimestreSupprEval", { n }) : "";
+          return `<tr><td class="mono">${esc(x.code)}</td><td>${esc(x.libelle)}</td><td class="num">${n}</td>
+          <td class="right" style="white-space:nowrap">${can("trimestre:modifier") ? `<button class="btn text icon sm" data-act="modifier-trimestre" data-v="${x.id}" title="${t("c.modifier")}"><i class="pi pi-pencil"></i></button>` : ""}${can("trimestre:supprimer") ? `<button class="btn text icon sm" data-act="supprimer-trimestre" data-v="${x.id}" ${supprimable(x) ? `title="${t("c.supprimer")}"` : `disabled title="${esc(raison)}"`}><i class="pi pi-trash" style="color:var(--danger)"></i></button>` : ""}</td></tr>`; }).join("")
+          : `<tr><td colspan="4"><div class="empty">${t("adm.aucunTrimestre")}</div></td></tr>`}
+        </tbody></table></div></div></div>`;
     } else {
-      corps = `<div class="card card-body stack">
-        <div class="row-between"><div><h3>${t("adm.appel")}</h3><div class="muted small" style="max-width:620px">${t("adm.appelTexte")}</div></div>
-          <label class="switch"><input type="checkbox" data-act="toggle-appel" ${D.configuration.isAppel ? "checked" : ""} ${can("configuration:modifier") ? "" : "disabled"}><span></span></label></div>
+      const modifiable = can("configuration:modifier") ? "" : "disabled";
+      corps = `<div class="row proto-note" style="margin-bottom:12px"><i class="pi pi-eye"></i>${t("demo.typeEtablissement")}
+          <div class="segmented">${[["secondaire", "adm.secondaire"], ["primaire", "adm.primaire"]].map(([k, l]) => `<button class="${(estPrimaire() ? "primaire" : "secondaire") === k ? "on" : ""}" data-act="demo-type-ecole" data-v="${k}">${t(l)}</button>`).join("")}</div></div>
+        <div class="card card-body stack">
+        ${estPrimaire() ? `<div class="row-between"><div><h3>${t("adm.disciplineGeree")}</h3><div class="muted small" style="max-width:620px">${t("adm.disciplineGereeTexte")}</div></div>
+          <label class="switch"><input type="checkbox" data-act="toggle-discipline" ${disciplineGeree() ? "checked" : ""} ${modifiable}><span></span></label></div>` : ""}
+        ${disciplineGeree() ? `<div class="row-between"><div><h3>${t("adm.appel")}</h3><div class="muted small" style="max-width:620px">${t("adm.appelTexte")}</div></div>
+          <label class="switch"><input type="checkbox" data-act="toggle-appel" ${D.configuration.isAppel ? "checked" : ""} ${modifiable}><span></span></label></div>`
+          : `<div class="row-between"><div><h3>${t("adm.appel")}</h3><div class="muted small" style="max-width:620px">${t("adm.appelSansDiscipline")}</div></div>${tag("secondary", t("adm.indisponible"))}</div>`}
         <div class="row-between"><div><h3>${t("adm.absencesPayees")}</h3><div class="muted small" style="max-width:620px">${t("adm.absencesPayeesTexte")}</div></div>
           <label class="switch"><input type="checkbox" data-act="toggle-absences-payees" ${D.configuration.isAbsenceJustifieePayee ? "checked" : ""} ${can("configuration:modifier") ? "" : "disabled"}><span></span></label></div>
-        <div class="row-between"><div><h3>${t("adm.typeEcole")}</h3><div class="muted small">${t("adm.typeEcoleTexte")}</div></div>${tag("info", t("adm.secondaire"))}</div>
+        <div class="row-between"><div><h3>${t("adm.typeEcole")}</h3><div class="muted small">${t("adm.typeEcoleTexte")}</div></div>${tag("info", t(estPrimaire() ? "adm.primaire" : "adm.secondaire"))}</div>
       </div>`;
     }
-    return entete(t("adm.titre"), t("adm.sousTitre")) + `<div class="tabs" style="margin-bottom:16px">${onglets.map(([k, l]) => `<div class="tab ${tab === k ? "on" : ""}" data-tab="admin" data-v="${k}">${t(l)}</div>`).join("")}</div>${corps}`;
+    return entete(t("adm.titre"), t("adm.sousTitre")) + `<div class="tabs" style="margin-bottom:16px">${onglets.filter(([k]) => k !== "decisions" || disciplineGeree()).map(([k, l]) => `<div class="tab ${tab === k ? "on" : ""}" data-tab="admin" data-v="${k}">${t(l)}</div>`).join("")}</div>${corps}`;
   }
 
   /* ---------------- Utilisateurs, rôles et permissions ---------------- */
@@ -2172,10 +2664,12 @@
     let contenu;
     if (!ECRANS[route]) contenu = ecranDashboard();
     else if (item && !can(item.p)) contenu = entete(t(item.l)) + accesRefuse();
+    else if (item && item.si && !item.si()) contenu = entete(t(item.l)) + `<div class="message warn"><i class="pi pi-info-circle"></i><div class="small">${t("disc.nonGeree")}</div></div>`;
     else if (route === "eleves" && param) contenu = ecranFicheEleve(param);
     else contenu = ECRANS[route]();
     app.innerHTML = layout(route, contenu);
     ameliorerSelects(app);
+    tableauxEnCartes(app);
   }
   const aller = r => { S.menuOuvert = false; S.popup = false; if (location.hash === "#/" + r) render(); else location.hash = "#/" + r; };
 
@@ -2302,7 +2796,13 @@
       const p = parentDe(S.f.notes.evaluation);
       toast("success", t("notes.enregistreOk"), p && S.calcule[p.parent] ? t("notes.parentRecalcule", { p: evaluation(p.parent).libelle }) : t("notes.enregistreOkTexte"));
     },
-    "calculer-discipline": () => toast("success", t("disc.calculOk"), t("disc.calculOkTexte")),
+    // POST /discipline-eleve/calculer-classe/{id_classe}?id_evaluation= : heures calculées depuis l'appel (simulées ici)
+    "calculer-discipline": () => {
+      const ev = Number(S.f.discipline.evaluation), base = D.disciplines[ev] || {};
+      D.disciplines[ev] = { ...base, ...Object.fromEntries(elevesClasse(S.sel.classe).map(e => [e.id, { nonJustifie: (e.id * 7 + ev * 3) % 6, justifie: (e.id + ev) % 3 }])) };
+      render();
+      toast("success", t("disc.calculOk"), t("disc.calculOkTexte"));
+    },
     // Simule POST /discipline-eleve/add-bulk ou PATCH /discipline-eleve/update-bulk (mode manuel)
     "enregistrer-discipline": () => {
       const ev = S.f.discipline.evaluation, cle = `disc|${ev}|${S.sel.classe}`, b = brouillon(cle);
@@ -2343,11 +2843,51 @@
       render();
     },
     "struct-modifier": v => { const [type, id] = v.split("|"); ouvrirStructure(type, Number(id)); },
+    "struct-supprimer": v => { const [type, id] = v.split("|"); supprimerStructure(type, Number(id)); },
     "modifier-tranche": v => dialogTranche(Number(v)),
     "annuler-reglement": v => { const r = D.reglements.find(x => x.id === Number(v)); r.statut = "annule"; dialogHistorique(r.eleve); render(); dialogHistorique(r.eleve); toast("warn", t("sco.annuleOk"), fcfa(r.montant)); },
     "bareme-sel": v => { S.f.baremeSel = Number(v); render(); },
+    "ajouter-bareme": () => dialogBareme(),
+    "ajouter-groupe-matiere": () => dialogGroupeMatiere(),
+    // Tout déplier / tout replier les groupes d'un onglet (v = "gm|plier", "gme|deplier"…)
+    "plier-groupes": v => {
+      const [prefixe, mode] = v.split("|"), p = S.plies || (S.plies = new Set());
+      const ids = prefixe === "gm" ? D.groupesMatieres.map(g => g.id) : D.groupes.map(g => g.id);
+      ids.forEach(id => mode === "plier" ? p.add(`${prefixe}:${id}`) : p.delete(`${prefixe}:${id}`));
+      render();
+    },
+    "ajouter-groupe-ev": () => dialogGroupeEv(),
+    "modifier-groupe-ev": v => dialogGroupeEv(Number(v)),
+    "supprimer-groupe-ev": v => { const g = byId(D.groupes, v); confirmation(t("adm.confirmerSuppressionGroupeEv", { g: g.libelle }), null, () => { D.groupes = D.groupes.filter(x => x.id !== g.id); D.matieres = D.matieres.filter(m => m.groupe !== g.id); render(); toast("success", t("adm.groupeSupprime"), g.libelle); }); },
+    "ajouter-matiere-ev": v => dialogMatiereEv(null, Number(v) || null),
+    "modifier-matiere-ev": v => dialogMatiereEv(Number(v)),
+    "supprimer-matiere-ev": v => { const m = byId(D.matieres, v); confirmation(t("adm.confirmerSuppressionMatiere", { m: m.libelle }), null, () => { D.matieres = D.matieres.filter(x => x.id !== m.id); render(); toast("success", t("adm.matiereSupprimee"), m.libelle); }); },
+    "modifier-groupe-matiere": v => dialogGroupeMatiere(Number(v)),
+    "supprimer-groupe-matiere": v => supprimerGroupeMatiere(Number(v)),
+    "ajouter-matiere-ens": v => dialogMatiereEns(null, Number(v) || null),
+    "modifier-matiere-ens": v => dialogMatiereEns(Number(v)),
+    "supprimer-matiere-ens": v => supprimerMatiereEns(Number(v)),
+    "demo-decisions": v => { S.demoSansDiscipline = v === "sans"; render(); },
+    "ajouter-decision": () => dialogDecision(),
+    "modifier-decision": v => dialogDecision(Number(v)),
+    "supprimer-decision": v => supprimerDecision(Number(v)),
+    "modifier-bareme": v => dialogBareme(Number(v)),
+    "ajouter-appreciation": () => dialogAppreciation(),
+    "modifier-appreciation": v => dialogAppreciation(Number(v)),
+    // PATCH /configuration/update/{id} {"is_discipline_manage": …} : désactiver coupe aussi l'appel des élèves
+    "toggle-discipline": () => {
+      D.configuration.isDisciplineManage = !disciplineGeree();
+      if (!D.configuration.isDisciplineManage) D.configuration.isAppel = false;
+      render(); toast("success", t("adm.configOk"), t(D.configuration.isDisciplineManage ? "adm.disciplineActivee" : "adm.disciplineDesactivee"));
+    },
+    "demo-type-ecole": v => { D.ecole.typeSchool = v === "primaire" ? "education_base" : "secondaire"; render(); },
     "toggle-appel": () => { D.configuration.isAppel = !D.configuration.isAppel; toast("success", t("adm.configOk"), t(D.configuration.isAppel ? "adm.appelActive" : "adm.appelDesactive")); },
-    cloturer: () => confirmation(t("adm.confirmerCloture"), null),
+    cloturer: v => cloturerAnnee(Number(v)),
+    "ajouter-annee": () => dialogPremiereAnnee(),
+    "annee-suivante": () => passerAnneeSuivante(),
+    "ajouter-trimestre": () => dialogTrimestre(),
+    "modifier-trimestre": v => dialogTrimestre(Number(v)),
+    "supprimer-trimestre": v => supprimerTrimestre(Number(v)),
     "role-sel": v => { S.f.roleSel = Number(v); render(); },
     perm: () => {},
     desactiver: v => { const u = byId(D.utilisateurs, v); confirmation(t("usr.confirmerDesactivation", { u: u.username }), null, () => { u.actif = false; render(); toast("success", t("usr.desactiveOk"), u.username); }); },
@@ -2573,6 +3113,15 @@
     ev.preventDefault();
     if (form.dataset.form === "tranche") { enregistrerTranche(form); return; }
     if (form.dataset.form === "structure") { enregistrerStructure(form); return; }
+    if (form.dataset.form === "bareme") { enregistrerBareme(form); return; }
+    if (form.dataset.form === "decision") { enregistrerDecision(form); return; }
+    if (form.dataset.form === "annee") { enregistrerAnnee(form); return; }
+    if (form.dataset.form === "groupe-matiere") { enregistrerGroupeMatiere(form); return; }
+    if (form.dataset.form === "groupe-ev") { enregistrerGroupeEv(form); return; }
+    if (form.dataset.form === "matiere-ev") { enregistrerMatiereEv(form); return; }
+    if (form.dataset.form === "matiere-ens") { enregistrerMatiereEns(form); return; }
+    if (form.dataset.form === "trimestre") { enregistrerTrimestre(form); return; }
+    if (form.dataset.form === "appreciation") { enregistrerAppreciation(form); return; }
     if (form.dataset.form === "filtre-hreg") {
       const du = document.getElementById("hreg-du").value, au = document.getElementById("hreg-au").value, q = document.getElementById("hreg-q").value;
       if (du && au && du > au) { document.getElementById("hreg-erreur").innerHTML = `<div class="message danger small"><i class="pi pi-times-circle"></i>${t("hist.errDates")}</div>`; return; }

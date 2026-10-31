@@ -81,9 +81,10 @@
 
   // Programme du niveau Seconde (classe de démonstration : 2nde C)
   const groupes = [
-    { id: 1, code: "LIT", libelle: "Matières littéraires" },
-    { id: 2, code: "SCI", libelle: "Matières scientifiques" },
-    { id: 3, code: "AUT", libelle: "Autres matières" },
+    // Groupes de matières évaluées : rattachés à un niveau (ici la Seconde, niveau 5)
+    { id: 1, code: "LIT-2NDE", libelle: "Matières littéraires", niveau: 5 },
+    { id: 2, code: "SCI-2NDE", libelle: "Matières scientifiques", niveau: 5 },
+    { id: 3, code: "AUT-2NDE", libelle: "Autres matières", niveau: 5 },
   ];
   const matieres = [
     { id: 1, code: "FRA", libelle: "Français", groupe: 1, coef: 3, bareme: 1, prof: "M. NKOULOU" },
@@ -96,6 +97,17 @@
     { id: 8, code: "INFO", libelle: "Informatique", groupe: 2, coef: 2, bareme: 2, prof: "M. KENFACK" },
     { id: 9, code: "EPS", libelle: "EPS", groupe: 3, coef: 1, bareme: 1, prof: "M. ABENA" },
   ];
+
+  // Matières enseignées (GroupeMatiere / Matiere) : enseignants, emploi du temps et appel.
+  // Distinctes des matières évaluées ci-dessus (MatiereEvalue : coefficient et barème pour les bulletins).
+  const groupesMatieres = [
+    { id: 1, libelle: "Lettres et langues" },
+    { id: 2, libelle: "Sciences" },
+    { id: 3, libelle: "Sport et techniques" },
+  ];
+  // Type de matière évaluée (Ecrite, Orale, Pratique)
+  matieres.forEach(m => { m.type = m.code === "EPS" ? "Pratique" : "Ecrite"; });
+  const matieresEns = matieres.map(m => ({ id: m.id, code: m.code, libelle: m.libelle, groupe: m.groupe }));
 
   const trimestres = [
     { id: 1, code: "TRIM-1", libelle: "Trimestre 1" },
@@ -247,7 +259,7 @@
   const CRUD = ["ajouter", "modifier", "supprimer", "consulter"];
   const catalogue = {
     administration: [
-      ["annee", ["ajouter", "modifier", "consulter", "cloturer"]], ["configuration", ["ajouter", "modifier", "consulter"]],
+      ["annee", ["ajouter", "modifier", "consulter"]], ["configuration", ["ajouter", "modifier", "consulter"]],
       ["section", CRUD], ["cycle", CRUD], ["niveau", CRUD], ["classe", CRUD], ["serie", CRUD], ["trimestre", CRUD],
       ["groupe_matiere", CRUD], ["matiere", CRUD], ["groupe_matiere_evalue", CRUD], ["matiere_evalue", CRUD],
       ["bareme", CRUD], ["appreciation", CRUD], ["discipline_decision", CRUD], ["tranche_pension", CRUD], ["utilisateur", CRUD],
@@ -362,10 +374,10 @@
   });
 
   window.DATA = {
-    ecole, sections, cycles, niveaux, classes, series, baremes, appreciations, groupes, matieres, trimestres,
+    ecole, sections, cycles, niveaux, classes, series, baremes, appreciations, groupes, matieres, groupesMatieres, matieresEns, trimestres,
     evaluations, dependances, decisions, eleves, notes, disciplines, tranches, reglements, enseignants, cours,
     catalogue, roles, utilisateurs, anciensEleves, inscriptions, heuresEnseignants, versementsSalaire, presencesEnseignants, appels,
-    configuration: { isAppel: true, isAbsenceJustifieePayee: false },
+    configuration: { isAppel: true, isAbsenceJustifieePayee: false, isDisciplineManage: true },
     annees: [
       { id: 1, code: "2025-2026", libelle: "2025-2026", cloture: true },
       { id: 2, code: "2026-2027", libelle: "2026-2027", cloture: false },

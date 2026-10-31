@@ -37,13 +37,13 @@ CRUD = ["ajouter", "modifier", "supprimer", "consulter"]
 VERBES = {
     "ajouter": "Ajouter", "modifier": "Modifier", "supprimer": "Supprimer", "consulter": "Consulter",
     "rechercher": "Rechercher", "inscrire": "Inscrire", "annuler": "Annuler", "calculer": "Calculer",
-    "generer": "Générer", "cloturer": "Clôturer", "attribuer": "Attribuer",
+    "generer": "Générer", "attribuer": "Attribuer",
 }
 
 # domaine -> [(module, complément du libellé, actions)]
 CATALOGUE_PERMISSIONS = {
     "administration": [
-        ("annee", "une année scolaire", ["ajouter", "modifier", "consulter", "cloturer"]),
+        ("annee", "une année scolaire", ["ajouter", "modifier", "consulter"]),
         ("configuration", "la configuration", ["ajouter", "modifier", "consulter"]),
         ("section", "une section", CRUD),
         ("cycle", "un cycle", CRUD),

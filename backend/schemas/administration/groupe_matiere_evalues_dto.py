@@ -30,6 +30,7 @@ class GroupeMatiereEvalueUpdateDTO(SQLModel):
 
 class GroupeMatiereEvalueResponseDTO(GroupeMatiereEvalueBase):
     id: int
+    id_niveau: int
 
 
 class GroupeMatiereEvalueReadWithMatiere(GroupeMatiereEvalueResponseDTO):

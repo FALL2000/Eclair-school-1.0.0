@@ -16,7 +16,6 @@ class Action(str, Enum):
     ANNULER = "annuler"
     CALCULER = "calculer"
     GENERER = "generer"
-    CLOTURER = "cloturer"
     ATTRIBUER = "attribuer"
 
 

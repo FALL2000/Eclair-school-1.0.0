@@ -150,11 +150,14 @@ class GroupeMatiereEvalueService:
                 detail=f"Une erreur lors de la recuperation du groupe de matiere evalue: {str(e)}",
             )
 
-    def get_all_groupe_matiere_evalue(self, with_relations: bool = False):
+    def get_all_groupe_matiere_evalue(self, with_relations: bool = False, niveau_id: int | None = None):
+        """Recupere les groupes de matieres evalues, eventuellement ceux d'un seul niveau"""
         try:
-            db_groupes_matiere_evalue = self.groupe_matiere_evalue_repository.findAll(
-                load_relations=with_relations)
-            return db_groupes_matiere_evalue
+            if niveau_id is None:
+                return self.groupe_matiere_evalue_repository.findAll(load_relations=with_relations)
+            self._check_niveau_exists(niveau_id)
+            return self.groupe_matiere_evalue_repository.findBy(
+                load_relations=with_relations, id_niveau=niveau_id)
         except HTTPException as http_exec:
             raise http_exec
         except Exception as e:

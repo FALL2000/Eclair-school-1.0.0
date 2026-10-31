@@ -57,7 +57,18 @@ class DisciplineEleveService:
         configurations = self.configuration_repository.findAll()
         return len(configurations) > 0 and configurations[0].is_appel
 
+    def _check_discipline_geree(self):
+        if not self.configuration_repository.is_discipline_geree():
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error_code": "DISCIPLINE_NON_GEREE",
+                    "message": "La discipline n'est pas gérée par l'établissement (configuration)",
+                },
+            )
+
     def _check_appel_inactif(self):
+        self._check_discipline_geree()
         if self._is_appel_actif():
             raise HTTPException(
                 status_code=403,
@@ -68,6 +79,7 @@ class DisciplineEleveService:
             )
 
     def _check_appel_actif(self):
+        self._check_discipline_geree()
         if not self._is_appel_actif():
             raise HTTPException(
                 status_code=403,

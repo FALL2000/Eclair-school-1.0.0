@@ -74,7 +74,8 @@ class StatistiquesClasseDTO(SQLModel):
     nb_tableau_honneur: Optional[int] = None
     repartition: list[TrancheRepartitionDTO]
     par_genre: list[StatistiquesGenreDTO]
-    discipline: StatistiquesDisciplineDTO
+    discipline: Optional[StatistiquesDisciplineDTO] = Field(
+        default=None, description="Absent quand l'établissement ne gère pas la discipline")
     decisions_fin_annee: Optional[list[EffectifDecisionDTO]] = None
 
 
@@ -166,7 +167,8 @@ class BulletinEleveDTO(SQLModel):
     appreciation: Optional[str] = None
     is_reussite: Optional[bool] = None
     distinction: Optional[str] = None
-    discipline: DisciplineBulletinDTO
+    discipline: Optional[DisciplineBulletinDTO] = Field(
+        default=None, description="Absent quand l'établissement ne gère pas la discipline")
     moyennes_trimestres: Optional[list[MoyenneTrimestreDTO]] = None
     decision_fin_annee: Optional[str] = None
 
@@ -183,6 +185,8 @@ class EnteteBulletinDTO(SQLModel):
     seuil_reussite: float
     date_generation: date
     langue: str = Field(default="FR", description="Langue du bulletin : FR ou EN")
+    avec_discipline: bool = Field(
+        default=True, description="False : l'établissement ne gère pas la discipline, pas de partie discipline")
     evaluations: list[EvaluationColonneDTO] = Field(
         default=[], description="Colonnes de notes : évaluations du trimestre (bulletin trimestriel), "
                                 "évaluations de l'année (bulletin annuel) "

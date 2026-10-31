@@ -95,8 +95,10 @@ def get_one_groupe_matiere_evalue(
 def get_all_groupe_matiere_evalue(
     groupe_matiere_evalue_service: Annotated[GroupeMatiereEvalueService, Depends(get_groupe_matiere_evalue_service)],
     _: Annotated[dict[str, Any], Depends(require_permission(Module.GROUPE_MATIERE_EVALUE, Action.CONSULTER))],
+    niveau_id: Annotated[int | None, Query(description="Id du niveau (facultatif) : seulement les groupes de ce niveau")] = None,
 ):
-    return groupe_matiere_evalue_service.get_all_groupe_matiere_evalue()
+    """404 NIVEAU_NOT_FOUND si le niveau n'existe pas"""
+    return groupe_matiere_evalue_service.get_all_groupe_matiere_evalue(niveau_id=niveau_id)
 
 
 @router.get(
@@ -108,5 +110,7 @@ def get_all_groupe_matiere_evalue(
 def get_all_groupe_matiere_evalue_with_matiere(
     groupe_matiere_evalue_service: Annotated[GroupeMatiereEvalueService, Depends(get_groupe_matiere_evalue_service)],
     _: Annotated[dict[str, Any], Depends(require_permission(Module.GROUPE_MATIERE_EVALUE, Action.CONSULTER))],
+    niveau_id: Annotated[int | None, Query(description="Id du niveau (facultatif) : seulement les groupes de ce niveau")] = None,
 ):
-    return groupe_matiere_evalue_service.get_all_groupe_matiere_evalue(True)
+    """404 NIVEAU_NOT_FOUND si le niveau n'existe pas"""
+    return groupe_matiere_evalue_service.get_all_groupe_matiere_evalue(True, niveau_id)

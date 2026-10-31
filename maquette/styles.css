@@ -531,3 +531,41 @@ table.dt { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 /* Arbre du paramétrage : nœuds pliables */
 .tree-toggle { width: 26px; height: 26px; padding: 0; flex: none; }
 .tree-toggle-vide { display: inline-block; width: 26px; flex: none; }
+/* Petit écran : tableaux affichés en cartes (une carte par ligne, libellé de colonne à gauche, valeur à droite) */
+@media (max-width: 640px) {
+  .table-wrap:has(> .dt-cartes) { max-height: none; overflow: visible; }
+  table.dt-cartes, .dt-cartes tbody { display: block; width: 100%; }
+  .dt-cartes thead { display: none; }
+  .dt-cartes tbody { padding: 10px; }
+  .dt-cartes tr { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 6px 12px; margin-bottom: 10px; box-shadow: var(--shadow); }
+  .dt-cartes tr:last-child { margin-bottom: 0; }
+  .dt-cartes td { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; border: 0; border-bottom: 1px dashed var(--border); text-align: right; background: transparent !important; min-width: 0; }
+  .dt-cartes td:last-child { border-bottom: 0; }
+  .dt-cartes td::before { content: attr(data-label); flex: none; max-width: 45%; text-align: left; color: var(--text-muted); font-size: 12.5px; font-weight: 500; }
+  .dt-cartes td:not([data-label])::before { display: none; }
+  .dt-cartes td > * { min-width: 0; }
+  .dt-cartes td.num { white-space: normal; }
+  /* Tête de carte : nom de l'élève, de l'enseignant… */
+  .dt-cartes td.cell-titre { order: -1; display: block; text-align: left; font-size: 14.5px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .dt-cartes td.cell-titre::before { display: none; }
+  .dt-cartes td.cell-index { display: none; }
+  /* Pied de carte : boutons d'action */
+  .dt-cartes td.cell-actions { order: 99; justify-content: flex-end; flex-wrap: wrap; border-bottom: 0; padding-top: 10px; }
+  .dt-cartes td.cell-actions:empty { display: none; }
+  .dt-cartes td .input.note { max-width: 110px; }
+  .dt-cartes td > .progress { flex: 1; max-width: 55%; }
+  .dt-cartes tr.group td::before { text-transform: none; letter-spacing: 0; }
+  /* Lignes particulières */
+  .dt-cartes tr.ligne-pleine { padding: 0; border: 0; box-shadow: none; background: transparent; }
+  .dt-cartes tr.ligne-pleine td { display: block; text-align: center; border: 0; }
+  .dt-cartes tr.group { background: var(--primary-soft); border-color: transparent; box-shadow: none; margin-top: 14px; }
+  .dt-cartes tr.group td { color: var(--primary-soft-text); }
+  .dt-cartes tr.total { background: var(--surface-alt); font-weight: 700; }
+  .dt-cartes tr.selected { background: var(--primary-soft); border-color: var(--primary); }
+  .dt-cartes tbody tr:hover td { background: transparent; }
+  .dt-cartes tr.clickable:active { background: var(--surface-hover); }
+  /* Arbre du paramétrage : décalage des cartes selon la profondeur */
+  .dt-cartes tr.struct-niveau { margin-left: 12px; }
+  .dt-cartes tr.struct-classe { margin-left: 24px; }
+  .dt-cartes tr[class^="struct-"] .cell-titre > .row { padding-left: 0 !important; }
+}

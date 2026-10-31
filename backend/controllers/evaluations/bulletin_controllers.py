@@ -10,6 +10,7 @@ from repositories.administration.annee_repository import AnneeRepository
 from repositories.administration.appreciation_repository import AppreciationRepository
 from repositories.administration.bareme_repository import BaremeRepository
 from repositories.administration.classe_repository import ClasseRepository
+from repositories.administration.configuration_repository import ConfigurationRepository
 from repositories.administration.discipline_decision_repository import DisciplineDecisionRepository
 from repositories.administration.groupe_matiere_evalue_repository import GroupeMatiereEvalueRepository
 from repositories.administration.matiere_evalue_repository import MatiereEvalueRepository
@@ -40,6 +41,7 @@ def get_bulletin_service(db: Session = Depends(get_db)):
         AppreciationRepository(db),
         DisciplineEleveRepository(db),
         DisciplineDecisionRepository(db),
+        ConfigurationRepository(db),
     )
 
 

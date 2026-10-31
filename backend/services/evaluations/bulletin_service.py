@@ -10,6 +10,7 @@ from repositories.administration.annee_repository import AnneeRepository
 from repositories.administration.appreciation_repository import AppreciationRepository
 from repositories.administration.bareme_repository import BaremeRepository
 from repositories.administration.classe_repository import ClasseRepository
+from repositories.administration.configuration_repository import ConfigurationRepository
 from repositories.administration.discipline_decision_repository import DisciplineDecisionRepository
 from repositories.administration.groupe_matiere_evalue_repository import GroupeMatiereEvalueRepository
 from repositories.administration.matiere_evalue_repository import MatiereEvalueRepository
@@ -86,6 +87,7 @@ class BulletinService:
         appreciation_repository: AppreciationRepository,
         discipline_eleve_repository: DisciplineEleveRepository,
         discipline_decision_repository: DisciplineDecisionRepository,
+        configuration_repository: ConfigurationRepository,
     ):
         self.annee_repository = annee_repository
         self.classe_repository = classe_repository
@@ -100,6 +102,7 @@ class BulletinService:
         self.appreciation_repository = appreciation_repository
         self.discipline_eleve_repository = discipline_eleve_repository
         self.discipline_decision_repository = discipline_decision_repository
+        self.configuration_repository = configuration_repository
 
     def _get_annee_service(self):
         return AnneeService(self.annee_repository)
@@ -162,7 +165,10 @@ class BulletinService:
             key=lambda i: (i.eleve.nom, i.eleve.prenom or ""),
         )
         notations = self.notation_repository.findBy(load_relations=True, id_classe=id_classe, id_annee=annee.id)
-        disciplines = self.discipline_eleve_repository.findBy(id_classe=id_classe, id_annee=annee.id)
+        avec_discipline = self.configuration_repository.is_discipline_geree()
+        disciplines = (
+            self.discipline_eleve_repository.findBy(id_classe=id_classe, id_annee=annee.id) if avec_discipline else []
+        )
 
         return {
             "annee": annee,
@@ -172,7 +178,8 @@ class BulletinService:
             "inscriptions": inscriptions,
             "notes": {(n.id_evaluation, n.id_eleve, n.id_matiere_evalue): n for n in notations},
             "disciplines": {(d.id_evaluation, d.id_eleve): d for d in disciplines},
-            "decisions": self.discipline_decision_repository.findAll(),
+            "decisions": self.discipline_decision_repository.findAll() if avec_discipline else [],
+            "avec_discipline": avec_discipline,
             "appreciations_reference": self._get_appreciations_reference(langue),
             "langue": langue,
         }
@@ -282,7 +289,10 @@ class BulletinService:
 
     def _get_discipline(self, ctx: dict, id_eleve: int, evaluations: list[Evaluation]) -> dict:
         """Cumul des heures d'absence de l'élève sur les évaluations (dépendances déjà exclues) ;
-        la décision disciplinaire porte sur les heures NON justifiées (nb_heure_obtenu)"""
+        la décision disciplinaire porte sur les heures NON justifiées (nb_heure_obtenu).
+        None quand l'établissement ne gère pas la discipline (pas de partie discipline au bulletin)"""
+        if not ctx["avec_discipline"]:
+            return None
         enregistrements = [
             d for d in (ctx["disciplines"].get((e.id, id_eleve)) for e in evaluations) if d is not None
         ]
@@ -466,9 +476,11 @@ class BulletinService:
                 "taux_reussite": stats_genre["taux_reussite"],
             })
 
-        total = sum(b["discipline"]["nb_heure_total"] for b in liste)
-        justifiees = sum(b["discipline"]["nb_heure_justifie"] for b in liste)
-        non_justifiees = sum(b["discipline"]["nb_heure_obtenu"] for b in liste)
+        # Discipline non gérée : chaque bulletin a discipline = None, pas de statistiques de discipline
+        avec_discipline = all(b["discipline"] is not None for b in liste)
+        total = sum(b["discipline"]["nb_heure_total"] for b in liste) if avec_discipline else 0
+        justifiees = sum(b["discipline"]["nb_heure_justifie"] for b in liste) if avec_discipline else 0
+        non_justifiees = sum(b["discipline"]["nb_heure_obtenu"] for b in liste) if avec_discipline else 0
         decisions_fin_annee = [b.get("decision_fin_annee") for b in liste]
 
         return {
@@ -487,7 +499,7 @@ class BulletinService:
             ),
             "repartition": repartition(moyennes, TRANCHES_REPARTITION),
             "par_genre": par_genre,
-            "discipline": {
+            "discipline": None if not avec_discipline else {
                 "total_heures": total,
                 "total_heures_justifiees": justifiees,
                 "total_heures_non_justifiees": non_justifiees,
@@ -540,6 +552,7 @@ class BulletinService:
             "seuil_reussite": seuil,
             "date_generation": date.today(),
             "langue": ctx["langue"].value,
+            "avec_discipline": ctx["avec_discipline"],
             "evaluations": evaluations or [],
         }
 

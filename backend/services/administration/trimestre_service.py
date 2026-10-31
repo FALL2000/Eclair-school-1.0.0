@@ -80,7 +80,7 @@ class TrimestreService:
                     status_code=409,
                     detail={
                         "error_code": "CANNOT_DELETE",
-                        "message": "Impossible de supprimer une section durant une annee scolaire en cours"
+                        "message": "Impossible de supprimer un trimestre pendant une année scolaire en cours"
                     }
                 )
             delete_trimestre = self.trimestre_repository.deleteOne(
