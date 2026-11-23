@@ -569,3 +569,38 @@ table.dt { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .dt-cartes tr.struct-classe { margin-left: 24px; }
   .dt-cartes tr[class^="struct-"] .cell-titre > .row { padding-left: 0 !important; }
 }
+
+/* Tableau de bord : effectifs en barres horizontales */
+.hbars { display: flex; flex-direction: column; gap: 8px; }
+.hbar { display: grid; grid-template-columns: 160px minmax(0, 1fr) 56px; align-items: center; gap: 12px; font-size: 13px; }
+.hbar > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); }
+.hbar > div { height: 10px; background: var(--surface-hover, rgba(127,127,127,.12)); border-radius: 5px; overflow: hidden; }
+.hbar > div > div { height: 100%; background: var(--primary); border-radius: 5px; }
+.hbar > b { text-align: right; font-variant-numeric: tabular-nums; }
+.hbar.total { border-top: 1px solid var(--border); padding-top: 8px; }
+.hbar.total > div { background: none; }
+.hbar.total > span { color: inherit; font-weight: 600; }
+@media (max-width: 640px) { .hbar { grid-template-columns: 96px minmax(0, 1fr) 44px; } }
+
+/* Skeleton loaders : chargement par composant (équivalent de <p-skeleton> dans PrimeNG) */
+.is-loading > :not(.skel) { display: none !important; }
+.bars.is-loading, .hbars.is-loading, .card.stat.is-loading { display: block; }
+.paginator.is-loading { visibility: hidden; }
+.skel { width: 100%; }
+.sk { display: block; position: relative; overflow: hidden; height: 12px; border-radius: 6px; background: var(--border); flex-shrink: 0; }
+.sk::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface) 70%, transparent), transparent);
+  animation: sk-brillance 1.2s ease-in-out infinite; }
+.sk.sk-lg { height: 22px; }
+.sk.sk-carre { width: 44px; height: 44px; border-radius: 10px; }
+.sk.sk-rond { width: 32px; height: 32px; border-radius: 50%; }
+.sk.sk-tag { height: 20px; border-radius: 10px; }
+.skel-stat { display: flex; gap: 14px; align-items: flex-start; }
+.skel-table { padding: 4px 0; }
+.skel-ligne { display: flex; align-items: center; gap: 24px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.skel-ligne:last-child { border-bottom: 0; }
+.skel-entete { background: var(--surface-alt); padding-top: 14px; padding-bottom: 14px; }
+.skel-bars { display: flex; align-items: flex-end; gap: 10px; height: 170px; }
+.skel-bars .sk { flex: 1; max-width: 44px; border-radius: 6px 6px 2px 2px; }
+@keyframes sk-brillance { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .sk::after { animation: none; } }

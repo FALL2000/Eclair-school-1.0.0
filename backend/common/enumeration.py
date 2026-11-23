@@ -64,3 +64,9 @@ TYPE_NOTATION_PAR_TYPE_SCHOOL = {
 class TypeSalaire(str, Enum):
     MENSUEL = "Mensuel"
     HORAIRE = "Horaire"
+
+
+class TypeEtablissement(str, Enum):
+    """Type d'etablissement scolaire"""
+    PRIMAIRE = "Primaire"
+    SECONDAIRE = "Secondaire"

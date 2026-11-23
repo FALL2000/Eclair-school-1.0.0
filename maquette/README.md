@@ -26,6 +26,24 @@ Paramètres d'URL utiles pour une démonstration :
 >
 > Dans l'application, ces états et ces données viennent du backend.
 
+## Chargement par composant (skeleton)
+
+Pas de loader global pour la page : chaque composant qui affiche des données a son propre squelette (`<p-skeleton>` de PrimeNG dans le frontend) et s'affiche dès que **ses** données sont arrivées, indépendamment des autres.
+
+| Zone | Squelette |
+|---|---|
+| Carte statistique | icône + 3 lignes |
+| Tableau | ligne d'en-tête + lignes (avatar, colonnes) ; pagination masquée pendant le chargement |
+| Graphique en barres (verticales / horizontales) | barres grises |
+| Liste (évaluations du tableau de bord, jours de l'emploi du temps) | lignes de texte + étiquette |
+
+Les filtres, les en-têtes de carte et les boutons restent affichés. Le squelette apparaît :
+- à l'ouverture d'un écran ou d'un onglet : tous les composants de l'écran ;
+- au clic sur « Afficher » / « Rechercher », à un changement de page et à l'envoi d'un filtre au backend ;
+- sur le tableau de bord, au changement d'un filtre : **seule la carte concernée** (moyennes ou nombre d'élèves).
+
+Le filtre local dans une classe (sans appel au backend) n'affiche pas de squelette. Dans la maquette, la durée du chargement est simulée (0,4 à 1,3 s).
+
 ## Fichiers
 
 | Fichier | Contenu |
@@ -41,7 +59,7 @@ Paramètres d'URL utiles pour une démonstration :
 | Écran | Route | Endpoints principaux | Permission |
 |---|---|---|---|
 | Connexion | `#/login` | `POST /auth/login` | — |
-| Tableau de bord | `#/dashboard` | agrégats (notes, règlements, discipline) | selon les blocs |
+| Tableau de bord (élèves inscrits, moyenne générale par classe filtrée par trimestre et évaluation, évaluations, nombre d'élèves par classe / niveau / cycle / section ; aucun bouton d'action) | `#/dashboard` | `GET /dashboard/moyennes?id_trimestre=&id_evaluation=`, `GET /dashboard/effectifs?par=classe|niveau|cycle|section` (endpoints à créer) | — |
 | Élèves (liste, fiche) | `#/eleves`, `#/eleves/{id}` | `/eleves/*` | `eleve:consulter` |
 | Historique des inscriptions (onglet de l'écran Inscriptions) | `#/inscription` | `GET /inscription/historique?date_debut=&date_fin=&q=&page=&page_size=` (tri par date décroissante) et `PATCH /inscription/update/{id}` (classe, redoublant ; date et utilisateur de la dernière modification enregistrés sur l'inscription ; classe non modifiable si l'élève a déjà des notes, une discipline, des présences — ou des règlements en cas de changement de niveau — dans l'année en cours). Réimpression du reçu en duplicata | `eleve:consulter` / `eleve:inscrire` |
 | Modification d'un élève (liste et fiche) | `#/eleves` | `PATCH /eleves/update/{id}` (existant) | `eleve:modifier` |
@@ -62,7 +80,7 @@ Paramètres d'URL utiles pour une démonstration :
 | Tranches de pension (onglet : par niveau, ajout et modification ; code unique, numéro d'ordre unique par niveau, montant > 0) | `#/scolarite` (onglet Tranches) | `GET /tranche-pension/by-niveau/{id_niveau}`, `POST /tranche-pension/add?id_niveau=`, `PATCH /tranche-pension/update/{id}` (409 `DUPLICATION_CODE`, `DUPLICATION_NUMERO_ORDRE`) | `tranche_pension:consulter` / `ajouter` / `modifier` |
 | Historique des règlements (onglet : année scolaire en cours, du plus récent au plus ancien, paginé ; filtres intervalle de dates, nom / prénom / matricule et statut Tous / Valides / Annulés ; total encaissé ; annulation) | `#/scolarite` (onglet Historique) | `GET /reglement/historique?date_debut=&date_fin=&q=&statut=valide|annule&page=&page_size=` (400 `INTERVALLE_DATES_INVALIDE`), `PATCH /reglement/annuler/{id}` | `reglement:consulter` / `annuler` |
 | Paramétrage (onglet Structure : arbre section › cycle › niveau › classe ; boutons + Section / Cycle / Niveau / Classe (section, cycle puis niveau choisis en cascade) et « + » sur chaque ligne (parents pré-remplis et verrouillés) ; onglet Séries : `/serie/*`, série choisie à la création d'un niveau ; crayon = modifier code, libellé, montant d'inscription ; le parent et la série ne se modifient pas) | `#/administration` | `POST /section/add`, `/cycle/add?section_id=`, `/niveau/add?cycle_id=&serie_id=`, `/classe/add?niveau_id=` (404 parent introuvable, 409 `DUPLICATION_CODE`), `PATCH /<type>/update/{id}` ; sections, cycles, niveaux, classes, matières évaluées, barèmes, appréciations, décisions, années, configuration | `classe:consulter` |
-| Paramétrage — matières enseignées (onglet « Matières » : groupes de matières pliables (chevron, Tout déplier / Tout replier) et leurs matières, nombre d'enseignants et de cours par matière ; + Groupe, + Matière (groupe à choisir) ou « + Matière » d'un groupe (groupe pré-rempli et verrouillé) ; modifier ; suppression impossible pendant une année en cours, et groupe non vide non supprimable). Distinctes des matières évaluées (coefficient, barème) de l'onglet « Matières évaluées » | `#/administration` (onglet Matières) | `GET /groupe-matiere/all_with_matieres`, `POST /groupe-matiere/add`, `PATCH /groupe-matiere/update/{id}`, `DELETE /groupe-matiere/delete/{id}`, `POST /matiere/add?groupe_matiere_id=`, `PATCH /matiere/update/{id}`, `DELETE /matiere/delete/{id}` | `groupe_matiere:*`, `matiere:*` |
+| Paramétrage — matières enseignées (onglet « Matières » : groupes de matières pliables (chevron, Tout déplier / Tout replier) et leurs matières, nombre d'enseignants par matière ; + Groupe, + Matière (groupe à choisir) ou « + Matière » d'un groupe (groupe pré-rempli et verrouillé) ; modifier ; suppression impossible pendant une année en cours, et groupe non vide non supprimable). Distinctes des matières évaluées (coefficient, barème) de l'onglet « Matières évaluées » | `#/administration` (onglet Matières) | `GET /groupe-matiere/all_with_matieres`, `POST /groupe-matiere/add`, `PATCH /groupe-matiere/update/{id}`, `DELETE /groupe-matiere/delete/{id}`, `POST /matiere/add?groupe_matiere_id=`, `PATCH /matiere/update/{id}`, `DELETE /matiere/delete/{id}` | `groupe_matiere:*`, `matiere:*` |
 | Paramétrage — matières évaluées (onglet « Matières évaluées » : choix du niveau ; groupes de matières évaluées du niveau, pliables, avec code, nombre de matières et total des coefficients ; + Groupe (rattaché au niveau affiché), + Matière (groupe à choisir) ou « + Matière » d'un groupe (groupe pré-rempli et verrouillé) ; matière évaluée : code, libellé, type Écrite / Orale / Pratique, coefficient facultatif, barème ; groupe non modifiable après création ; suppressions impossibles pendant une année en cours, supprimer un groupe supprime ses matières) | `#/administration` (onglet Matières évaluées) | `POST /groupe-matiere-evalue/add?niveau_id=`, `PATCH /groupe-matiere-evalue/update/{id}`, `DELETE /groupe-matiere-evalue/delete/{id}`, `POST /matiere-evalue/add?groupe_matiere_evalue_id=&bareme_id=`, `PATCH /matiere-evalue/update/{id}`, `DELETE /matiere-evalue/delete/{id}`, `GET /groupe-matiere-evalue/all_with_matieres?niveau_id=` (groupes du niveau affiché, `id_niveau` dans la réponse) | `groupe_matiere_evalue:*`, `matiere_evalue:*` |
 | Paramétrage — décisions disciplinaires (deux états, bascule « Démo — état de l'année » : sans discipline enregistrée → ajout / modification / suppression ; disciplines enregistrées → modification bloquée, suppression impossible si attribuée, ajout toujours possible ; alerte si les intervalles laissent des heures sans décision) | `#/administration` (onglet Décisions disciplinaires) | `POST /discipline-decision/add`, `PATCH /discipline-decision/update/{id}`, `DELETE /discipline-decision/delete/{id}` — l'état « disciplines enregistrées » n'est pas encore renvoyé par `GET /discipline-decision/all` | `discipline_decision:*` |
 | Paramétrage — années et trimestres (années : la **première année** est ajoutée une seule fois (format AAAA-AAAA) ; ensuite « Clôturer » l'année en cours, puis « Passer à l'année suivante » crée l'année calculée depuis la plus récente (2026-2027 → 2027-2028) et l'ouvre ; une seule année en cours ; trimestres : ajouter, modifier, supprimer seulement hors année en cours et sans évaluation rattachée) | `#/administration` (onglet Années et trimestres) | `GET /annee/all` ; `POST /annee/add` (corps `{code, libelle}` pour la première année, **sans corps** pour passer à l'année suivante) ; clôture : `PATCH /annee/update/{id}` avec `{"is_cloture": true}` ; `POST /trimestre/add`, `PATCH /trimestre/update/{id}`, `DELETE /trimestre/delete/{id}` | `annee:ajouter` (première année et passage), `annee:modifier` (clôture), `trimestre:*` |

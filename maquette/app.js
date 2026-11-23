@@ -43,6 +43,7 @@
       roleSel: 3,
       baremeSel: 1,
       matEv: { niveau: 5 }, // matières évaluées : niveau affiché
+      dash: { trimestre: 1, evaluation: "", par: "classe" }, // tableau de bord : période des moyennes, regroupement des effectifs
     },
     insc: { etape: 1, type: "nouveau", niveau: "", classe: "", redoublant: false },
     appel: {},
@@ -72,6 +73,8 @@
     pe: { date: AUJOURDHUI, q: "", applique: { date: AUJOURDHUI, q: "" }, saisie: {} }, // applique.classe : fixée au 1er affichage
     mp: { config: "non", q: "", matiere: "", applique: { q: "", matiere: "" }, page: 1, pageSize: 10 },
     rechercheEcole: null,
+    // Skeleton loaders : true = toutes les zones de données de l'écran, [noms] = seulement les composants [data-charge=nom]
+    aCharger: false, derniereRoute: null,
   };
   // Paramètres d'URL pour la démonstration : index.html?connecte&role=2&theme=dark&lang=en#/bulletins
   const params = new URLSearchParams(location.search);
@@ -660,59 +663,69 @@
   }
 
   /* ---------------- Tableau de bord ---------------- */
+  // Simule GET /dashboard/moyennes?id_trimestre=&id_evaluation= : moyenne générale de chaque classe
+  // (sans évaluation : moyenne du trimestre). null tant que la période n'a pas commencé.
+  function moyennesParClasse(idTrimestre, idEval) {
+    const evals = idEval ? [byId(D.evaluations, idEval)] : D.evaluations.filter(e => e.trimestre === idTrimestre);
+    if (!evals.some(e => e.debut <= AUJOURDHUI)) return [];
+    return D.classes.map(c => {
+      if (c.id === 6) {
+        const m = calculerBulletins(6, idEval ? { type: "evaluation", id: idEval } : { type: "trimestre", id: idTrimestre }).stats.moyenne;
+        return [c.libelle, m];
+      }
+      const graine = (c.id * 37 + (idEval || idTrimestre * 11) * 13) % 29; // valeur fictive stable
+      return [c.libelle, r2(9.6 + graine / 10)];
+    }).filter(([, m]) => m != null);
+  }
+  // Simule GET /dashboard/effectifs?par=classe|niveau|cycle|section
+  function effectifsPar(par) {
+    const cle = c => {
+      const n = byId(D.niveaux, c.niveau), cy = byId(D.cycles, n.cycle);
+      return par === "classe" ? c.libelle : par === "niveau" ? n.libelle : par === "cycle" ? cy.libelle : byId(D.sections, cy.section).libelle;
+    };
+    const groupes = new Map();
+    for (const c of D.classes) groupes.set(cle(c), (groupes.get(cle(c)) || 0) + c.effectif);
+    return [...groupes];
+  }
   function ecranDashboard() {
+    const f = S.f.dash;
     const effectif = D.classes.reduce((s, c) => s + c.effectif, 0);
-    const res = calculerBulletins(6, { type: "trimestre", id: 1 });
-    const situations = elevesClasse(6).map(e => situationTranche(e.id, 1));
-    const attendu = situations.reduce((s, x) => s + x.tr.montant, 0);
-    const encaisse = situations.reduce((s, x) => s + Math.min(x.regle, x.tr.montant), 0);
-    const heures = elevesClasse(6).reduce((s, e) => s + discipline(e.id, [1, 2]).total, 0);
-    const moyennesClasses = [["6e A", 11.42], ["6e B", 10.87], ["5e A", 11.9], ["4e A", 10.31], ["3e A", 12.04], ["2nde C", res.stats.moyenne], ["1ère D", 11.15], ["Tle C", 12.61]];
-    const maxBar = 20;
-    const derniers = [...D.reglements].filter(r => r.statut === "valide").sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
-    const aSuivre = res.bulletins.filter(b => (b.moy != null && b.moy < 10) || (disciplineGeree() && b.discipline.total >= 8)).slice(0, 4);
-    const actions = [
-      can("eleve:inscrire") ? `<button class="btn" data-go="inscription"><i class="pi pi-user-plus"></i>${t("dash.aInscrire")}</button>` : "",
-      can("notation:ajouter") ? `<button class="btn outlined" data-go="notes"><i class="pi pi-pencil"></i>${t("dash.aNotes")}</button>` : "",
-      can("reglement:ajouter") ? `<button class="btn outlined" data-go="scolarite"><i class="pi pi-wallet"></i>${t("dash.aReglement")}</button>` : "",
-    ].join("");
-    const carte = (icone, sev, label, valeur, sous) => `<div class="card stat"><div class="stat-icon ${sev}"><i class="pi ${icone}"></i></div><div><div class="stat-label">${label}</div><div class="stat-value">${valeur}</div><div class="stat-sub">${sous}</div></div></div>`;
+    const moyennes = moyennesParClasse(f.trimestre, f.evaluation);
+    const effectifs = effectifsPar(f.par);
+    const maxEffectif = Math.max(...effectifs.map(([, n]) => n));
     const statutEval = ev => ev.fin < AUJOURDHUI ? tag("secondary", t("eval.terminee")) : ev.debut <= AUJOURDHUI ? tag("success", t("eval.enCours")) : tag("info", t("eval.aVenir"));
-    return entete(t("dash.bonjour", { nom: utilisateurCourant().prenom }), t("dash.sousTitre", { annee: D.ecole.annee }), actions) + `
-      <div class="grid grid-4">
-        ${carte("pi-users", "", t("dash.eleves"), fmtInt(effectif), t("dash.elevesSous", { n: D.classes.length }))}
-        ${carte("pi-chart-line", "success", t("dash.moyenne"), fmt(res.stats.moyenne), t("dash.moyenneSous", { taux: fmt(res.stats.taux) }))}
-        ${can("reglement:consulter") ? carte("pi-wallet", "warn", t("dash.recouvrement"), Math.round(encaisse * 100 / attendu) + " %", t("dash.recouvrementSous", { m: fcfa(encaisse) })) : carte("pi-list", "warn", t("dash.evaluations"), D.evaluations.length, t("dash.evaluationsSous"))}
-        ${disciplineGeree() ? carte("pi-clock", "danger", t("dash.absences"), fmtInt(heures) + " h", t("dash.absencesSous")) : ""}
-      </div>
-      <div class="grid grid-main-side" style="margin-top:16px">
-        <div class="card">
-          <div class="card-head"><h2>${t("dash.moyennesClasses")}</h2><span class="tag secondary">${t("c.trimestre")} 1</span></div>
-          <div class="card-body"><div class="bars">${moyennesClasses.map(([l, v], i) => `
-            <div class="bar ${l === "2nde C" ? "" : "alt"}"><b>${fmt(v)}</b><div style="height:${(v / maxBar) * 100}%"></div><small>${esc(l)}</small></div>`).join("")}
-          </div></div>
+    return entete(t("dash.bonjour", { nom: utilisateurCourant().prenom }), t("dash.sousTitre", { annee: D.ecole.annee })) + `
+      <div class="grid grid-main-side">
+        <div class="card" data-charge="moyennes">
+          <div class="card-head"><h2>${t("dash.moyennesClasses")}</h2>
+            <div class="filters">
+              <div class="field"><label>${t("c.trimestre")}</label><select class="select" data-f="dash.trimestre">${D.trimestres.map(x => option(x.id, x.libelle, f.trimestre)).join("")}</select></div>
+              <div class="field"><label>${t("c.evaluation")}</label><select class="select" data-f="dash.evaluation">${option("", t("dash.toutesEvals"), f.evaluation)}${D.evaluations.filter(e => e.trimestre === f.trimestre).map(e => option(e.id, e.libelle, f.evaluation)).join("")}</select></div>
+            </div>
+          </div>
+          <div class="card-body">${moyennes.length ? `<div class="bars">${moyennes.map(([l, v]) => `
+            <div class="bar ${v < 10 ? "alt" : ""}"><b>${fmt(v)}</b><div style="height:${(v / 20) * 100}%"></div><small>${esc(l)}</small></div>`).join("")}
+          </div>` : `<div class="empty"><i class="pi pi-chart-bar" style="font-size:28px"></i><p>${t("dash.aucuneMoyenne")}</p></div>`}</div>
         </div>
-        <div class="card">
-          <div class="card-head"><h2>${t("dash.evaluations")}</h2></div>
-          <div class="card-body stack" style="gap:12px">
-            ${D.evaluations.filter(e => !parentDe(e.id)).slice(0, 5).map(ev => `
-              <div class="row-between"><div><div style="font-weight:600">${esc(ev.libelle)}</div><div class="small muted">${fmtDate(ev.debut)} → ${fmtDate(ev.fin)}</div></div>${statutEval(ev)}</div>`).join("")}
+        <div class="stack" style="gap:16px">
+          <div class="card stat"><div class="stat-icon"><i class="pi pi-users"></i></div><div><div class="stat-label">${t("dash.eleves")}</div><div class="stat-value">${fmtInt(effectif)}</div><div class="stat-sub">${t("dash.elevesSous", { n: D.classes.length })}</div></div></div>
+          <div class="card">
+            <div class="card-head"><h2>${t("dash.evaluations")}</h2></div>
+            <div class="card-body stack" style="gap:12px" data-skel>
+              ${D.evaluations.filter(e => !parentDe(e.id)).slice(0, 5).map(ev => `
+                <div class="row-between"><div><div style="font-weight:600">${esc(ev.libelle)}</div><div class="small muted">${fmtDate(ev.debut)} → ${fmtDate(ev.fin)}</div></div>${statutEval(ev)}</div>`).join("")}
+            </div>
           </div>
         </div>
       </div>
-      <div class="grid ${can("reglement:consulter") && can("eleve:consulter") ? "grid-2" : ""}" style="margin-top:16px">
-        ${can("reglement:consulter") ? `<div class="card">
-          <div class="card-head"><h2>${t("dash.derniersReglements")}</h2>${can("reglement:consulter") ? `<button class="btn text sm" data-go="scolarite">${t("c.voirTout")}<i class="pi pi-arrow-right"></i></button>` : ""}</div>
-          <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.eleve")}</th><th>${t("c.date")}</th><th class="num">${t("c.montant")}</th></tr></thead><tbody>
-            ${derniers.map(r => { const e = eleve(r.eleve); return `<tr><td><div class="person"><span class="avatar">${esc(initiales(e.prenom, e.nom))}</span><div>${esc(e.nom)} ${esc(e.prenom)}<div class="sub">${esc(byId(D.tranches, r.tranche).libelle)}</div></div></div></td><td>${fmtDate(r.date)}</td><td class="num">${fcfa(r.montant)}</td></tr>`; }).join("")}
-          </tbody></table></div>
-        </div>` : ""}
-        ${can("eleve:consulter") ? `<div class="card">
-          <div class="card-head"><h2>${t("dash.aSuivre")}</h2><span class="tag warn">2nde C</span></div>
-          <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.eleve")}</th><th class="num">${t("bul.moyenne")}</th>${disciplineGeree() ? `<th class="num">${t("disc.heures")}</th>` : ""}<th>${t("c.motif")}</th></tr></thead><tbody>
-            ${aSuivre.map(b => `<tr class="clickable" data-go="eleves/${b.e.id}"><td><div class="person"><span class="avatar">${esc(initiales(b.e.prenom, b.e.nom))}</span>${esc(b.e.nom)} ${esc(b.e.prenom)}</div></td><td class="num">${fmt(b.moy)}</td>${disciplineGeree() ? `<td class="num">${b.discipline.total} h</td>` : ""}<td>${b.moy < 10 ? tag("danger", t("dash.motifMoyenne")) : ""} ${b.discipline.total >= 8 ? tag("warn", t("dash.motifAbsences")) : ""}</td></tr>`).join("")}
-          </tbody></table></div>
-        </div>` : ""}
+      <div class="card" style="margin-top:16px" data-charge="effectifs">
+        <div class="card-head"><h2>${t("dash.effectifs")}</h2>
+          <div class="filters"><div class="field"><label>${t("dash.regrouperPar")}</label><select class="select" data-f="dash.par">${["classe", "niveau", "cycle", "section"].map(p => option(p, t("dash.par." + p), f.par)).join("")}</select></div></div>
+        </div>
+        <div class="card-body"><div class="hbars">${effectifs.map(([l, n]) => `
+          <div class="hbar"><span>${esc(l)}</span><div><div style="width:${(n / maxEffectif) * 100}%"></div></div><b>${fmtInt(n)}</b></div>`).join("")}
+          <div class="hbar total"><span>${t("c.total")}</span><div></div><b>${fmtInt(effectif)}</b></div>
+        </div></div>
       </div>`;
   }
 
@@ -1365,7 +1378,7 @@
   function ecranEmploiDuTemps() {
     const jours = ["c.lundi", "c.mardi", "c.mercredi", "c.jeudi", "c.vendredi"];
     const coursClasse = D.cours.filter(c => c[5] === Number(S.sel.classe)), avecCours = coursClasse.length > 0;
-    const colonnes = jours.map((j, ji) => `<div class="card"><div class="card-head" style="padding:10px 14px"><h3>${t(j)}</h3></div><div class="card-body stack" style="gap:8px;padding:10px">
+    const colonnes = jours.map((j, ji) => `<div class="card"><div class="card-head" style="padding:10px 14px"><h3>${t(j)}</h3></div><div class="card-body stack" style="gap:8px;padding:10px" data-skel>
       ${avecCours ? coursClasse.filter(c => c[0] === ji).sort((a, b) => a[1].localeCompare(b[1])).map(([, deb, fin, idm, ide]) => { const m = matiere(idm), e = byId(D.enseignants, ide); return `<div class="slot c${m.groupe + 1}"><b>${esc(m.libelle)}</b>${deb} – ${fin}<div class="small">${esc(e.nom)} ${esc(e.prenom || "")}</div></div>`; }).join("") : `<div class="muted small center">—</div>`}
     </div></div>`).join("");
     return entete(t("edt.titre"), t("edt.sousTitre"), can("cours:ajouter") ? `<button class="btn" data-act="ajouter-cours"><i class="pi pi-plus"></i>${t("edt.ajouter")}</button>` : "") + `
@@ -2472,22 +2485,20 @@
       const lignes = D.groupesMatieres.map(g => {
         const mats = D.matieresEns.filter(m => m.groupe === g.id);
         const raisonG = enCours ? t("adm.supprAnneeEnCours", { a: enCours.libelle }) : mats.length ? t("adm.groupeNonVide", { n: mats.length }) : "";
-        return `<tr class="group"><td><div class="row">${noeudPli("gm", g.id, mats.length)}<i class="pi pi-folder"></i> ${esc(g.libelle)}</div></td><td style="text-transform:none;letter-spacing:0;font-weight:500">${t("adm.nbMatieres", { n: mats.length })}</td><td></td>
+        return `<tr class="group"><td><div class="row">${noeudPli("gm", g.id, mats.length)}<i class="pi pi-folder"></i> ${esc(g.libelle)}</div></td><td style="text-transform:none;letter-spacing:0;font-weight:500">${t("adm.nbMatieres", { n: mats.length })}</td>
           <td class="right" style="white-space:nowrap">${can("matiere:ajouter") ? `<button class="btn text sm" data-act="ajouter-matiere-ens" data-v="${g.id}"><i class="pi pi-plus"></i>${t("c.matiere")}</button>` : ""}${can("groupe_matiere:modifier") ? btnModifier("modifier-groupe-matiere", g.id) : ""}${can("groupe_matiere:supprimer") ? btnSupprimer("supprimer-groupe-matiere", g.id, raisonG) : ""}</td></tr>`
           + (!pliOuvert("gm", g.id) ? "" : mats.length ? mats.map(m => {
             const profs = D.enseignants.filter(e => e.matieres.includes(m.libelle)).length;
-            const cours = D.cours.filter(c => matiere(c[3])?.libelle === m.libelle).length;
             return `<tr><td><div class="row" style="padding-left:34px"><span class="mono small muted" style="min-width:52px">${esc(m.code)}</span><b>${esc(m.libelle)}</b></div></td>
               <td>${profs ? tag("info", t("adm.nbEnseignants", { n: profs }), "pi-users") : `<span class="muted small">${t("adm.aucunEnseignant")}</span>`}</td>
-              <td>${cours ? tag("secondary", t("ens.nbCours", { n: cours })) : `<span class="muted small">—</span>`}</td>
               <td class="right" style="white-space:nowrap">${can("matiere:modifier") ? btnModifier("modifier-matiere-ens", m.id) : ""}${can("matiere:supprimer") ? btnSupprimer("supprimer-matiere-ens", m.id, enCours ? t("adm.supprAnneeEnCours", { a: enCours.libelle }) : "") : ""}</td></tr>`;
-          }).join("") : `<tr><td colspan="4"><div class="muted small" style="padding-left:34px">${t("adm.groupeVide")}</div></td></tr>`);
+          }).join("") : `<tr><td colspan="3"><div class="muted small" style="padding-left:34px">${t("adm.groupeVide")}</div></td></tr>`);
       }).join("");
       corps = `<div class="card"><div class="card-head"><div><h2>${t("adm.matieresEns")}</h2><div class="small muted">${t("adm.matieresEnsAide")}</div></div>
           <div class="row">${can("groupe_matiere:ajouter") ? `<button class="btn outlined sm" data-act="ajouter-groupe-matiere"><i class="pi pi-plus"></i>${t("adm.groupe")}</button>` : ""}${can("matiere:ajouter") ? `<button class="btn sm" data-act="ajouter-matiere-ens" data-v=""><i class="pi pi-plus"></i>${t("c.matiere")}</button>` : ""}</div></div>
         ${barrePli("gm", D.groupesMatieres)}
-        <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.matiere")}</th><th>${t("nav.enseignants")}</th><th>${t("adm.coursPlanifies")}</th><th></th></tr></thead><tbody>
-        ${D.groupesMatieres.length ? lignes : `<tr><td colspan="4"><div class="empty">${t("adm.aucunGroupeMatiere")}</div></td></tr>`}
+        <div class="table-wrap"><table class="dt"><thead><tr><th>${t("c.matiere")}</th><th>${t("nav.enseignants")}</th><th></th></tr></thead><tbody>
+        ${D.groupesMatieres.length ? lignes : `<tr><td colspan="3"><div class="empty">${t("adm.aucunGroupeMatiere")}</div></td></tr>`}
         </tbody></table></div>
         <div class="card-body small muted" style="border-top:1px solid var(--border)"><i class="pi pi-info-circle"></i> ${t("adm.matieresEnsInfo")}</div></div>`;
     } else if (tab === "matieres") {
@@ -2651,6 +2662,36 @@
     discipline: ecranDiscipline, bulletins: ecranBulletins, scolarite: ecranScolarite, administration: ecranAdministration,
     utilisateurs: ecranUtilisateurs, profil: ecranProfil,
   };
+  /* Chargement simulé par composant (skeleton) : chaque zone de données (carte statistique, tableau,
+     graphique, liste) affiche son propre squelette pendant un délai aléatoire, indépendamment des autres.
+     Dans l'application Angular : un signal « loading » par composant et <p-skeleton>. */
+  const sk = (w, cls = "") => `<span class="sk ${cls}" style="width:${w}"></span>`;
+  const SQUELETTES = {
+    stat: () => `<div class="skel skel-stat">${sk("44px", "sk-carre")}<div class="stack" style="gap:8px;flex:1">${sk("45%")}${sk("30%", "sk-lg")}${sk("60%")}</div></div>`,
+    table: n => `<div class="skel skel-table"><div class="skel-ligne skel-entete">${sk("18%")}${sk("30%")}${sk("16%")}${sk("12%")}</div>${Array.from({ length: n }, (_, i) =>
+      `<div class="skel-ligne">${sk("32px", "sk-rond")}${sk(`${22 + (i * 7) % 18}%`)}${sk("14%")}${sk("10%")}</div>`).join("")}</div>`,
+    bars: () => `<div class="skel skel-bars">${[55, 70, 45, 80, 60, 75, 50, 65, 58, 72].map(h => `<span class="sk" style="height:${h}%"></span>`).join("")}</div>`,
+    hbars: n => `<div class="skel stack" style="gap:12px">${Array.from({ length: n }, (_, i) => `<div class="row" style="gap:12px">${sk("120px")}${sk(`${85 - (i * 11) % 50}%`)}</div>`).join("")}</div>`,
+    liste: n => `<div class="skel stack" style="gap:14px">${Array.from({ length: n }, () => `<div class="row-between"><div class="stack" style="gap:6px;flex:1">${sk("55%")}${sk("35%")}</div>${sk("64px", "sk-tag")}</div>`).join("")}</div>`,
+  };
+  function simulerChargement(racine, portee) {
+    const zones = portee === true ? [racine] : portee.flatMap(nom => [...racine.querySelectorAll(`[data-charge="${nom}"]`)]);
+    const cibles = zones.flatMap(z => [...z.querySelectorAll(".card.stat, .table-wrap, .bars, .hbars, [data-skel], .paginator")]);
+    for (const el of new Set(cibles)) {
+      const lignes = Math.min(Math.max(el.querySelectorAll("tbody tr, .hbar, .row-between, .slot").length, 3), 8);
+      const type = el.matches(".card.stat") ? "stat" : el.matches(".table-wrap") ? "table" : el.matches(".bars") ? "bars"
+        : el.matches(".hbars") ? "hbars" : el.matches(".paginator") ? null : "liste";
+      el.classList.add("is-loading");
+      el.setAttribute("aria-busy", "true");
+      if (type) el.insertAdjacentHTML("afterbegin", SQUELETTES[type](lignes));
+      setTimeout(() => {
+        el.classList.remove("is-loading");
+        el.removeAttribute("aria-busy");
+        el.querySelector(":scope > .skel")?.remove();
+      }, 400 + Math.random() * 900);
+    }
+  }
+
   function routeCourante() {
     const [route, param] = (location.hash.replace(/^#\/?/, "") || "dashboard").split("/");
     return { route, param };
@@ -2670,6 +2711,10 @@
     app.innerHTML = layout(route, contenu);
     ameliorerSelects(app);
     tableauxEnCartes(app);
+    // Nouvel écran : tous ses composants se chargent ; sinon, seulement ce que l'action a demandé
+    const cleRoute = `${route}/${param || ""}`;
+    if (cleRoute !== S.derniereRoute) { S.derniereRoute = cleRoute; S.aCharger = true; }
+    if (S.aCharger) { simulerChargement(app.querySelector("main.content"), S.aCharger); S.aCharger = false; }
   }
   const aller = r => { S.menuOuvert = false; S.popup = false; if (location.hash === "#/" + r) render(); else location.hash = "#/" + r; };
 
@@ -3013,10 +3058,11 @@
     const go = ev.target.closest("[data-go]");
     if (go && !ev.target.closest("[data-act]:not([data-go])")) { ev.preventDefault(); aller(go.dataset.go); return; }
     const tabEl = ev.target.closest("[data-tab]");
-    if (tabEl) { S.tab[tabEl.dataset.tab] = tabEl.dataset.v; render(); return; }
+    if (tabEl) { S.tab[tabEl.dataset.tab] = tabEl.dataset.v; S.aCharger = true; render(); return; }
     const el = ev.target.closest("[data-act]");
     if (el && ACTIONS[el.dataset.act]) {
       if (el.tagName === "BUTTON" && el.disabled) return;
+      if (el.dataset.act === "afficher" || el.dataset.act.startsWith("page-")) S.aCharger = true;
       ACTIONS[el.dataset.act](el.dataset.v, el, ev);
       return;
     }
@@ -3052,6 +3098,8 @@
       if (el.dataset.f === "sal.pageSize") S.sal.page = 1;
       if (el.dataset.f === "vers.pageSize") S.vers.page = 1;
       if (el.dataset.f === "mp.pageSize") S.mp.page = 1;
+      if (el.dataset.f === "dash.trimestre") S.f.dash.evaluation = "";
+      if (el.dataset.f.startsWith("dash.")) S.aCharger = [el.dataset.f === "dash.par" ? "effectifs" : "moyennes"];
       if (el.dataset.f === "insc.niveau") {
         const classesNiveau = D.classes.filter(c => c.niveau === Number(S.insc.niveau));
         S.insc.classe = classesNiveau.length === 1 ? classesNiveau[0].id : "";
@@ -3111,6 +3159,8 @@
     const form = ev.target.closest("[data-form]");
     if (!form) return;
     ev.preventDefault();
+    // Filtres envoyés au backend (le filtre dans une classe est local : pas de chargement)
+    if ((form.dataset.form.startsWith("filtre-") && form.dataset.form !== "filtre-classe") || form.dataset.form === "recherche-ecole") S.aCharger = true;
     if (form.dataset.form === "tranche") { enregistrerTranche(form); return; }
     if (form.dataset.form === "structure") { enregistrerStructure(form); return; }
     if (form.dataset.form === "bareme") { enregistrerBareme(form); return; }
